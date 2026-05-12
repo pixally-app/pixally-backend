@@ -3,7 +3,14 @@ import { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { faker } from '@faker-js/faker/locale/pt_BR';
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl?.trim()) {
+  throw new Error(
+    'Missing required DATABASE_URL environment variable. Set DATABASE_URL before running prisma/seed.ts.',
+  );
+}
+
+const adapter = new PrismaPg({ connectionString: databaseUrl });
 const prisma = new PrismaClient({ adapter });
 
 function generateCpf(): string {
@@ -19,6 +26,10 @@ function generatePhone(): string {
 }
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Seed script cannot run in production environment.');
+  }
+
   console.log('Limpando banco...');
   await prisma.accountReceivable.deleteMany();
   await prisma.warning.deleteMany();
