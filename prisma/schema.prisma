@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -10,4 +5,181 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  username  String?
+  email     String
+  password  String
+  role      String
+  isActive  Boolean? @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  zapifyIntegrations ZapifyIntegration[]
+  clients            Client[]
+  monitoredContacts  MonitoredContact[]
+  pixReceipts        PixReceipt[]
+  accountsReceivable AccountReceivable[]
+
+  @@map("users")
+}
+
+model ZapifyIntegration {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  active         Boolean?
+  instanceApiUrl String?  @map("instance_api_url")
+  instanceKey    String?  @map("instance_key")
+  instanceToken  String?  @map("instance_token")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("zapify_integration")
+}
+
+model Client {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  name         String
+  document     String
+  documentType String?   @map("document_type")
+  status       Boolean?
+  amount       Decimal?  @db.Decimal
+  phones       Json?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  user               User               @relation(fields: [userId], references: [id])
+  phoneClients       PhoneClient[]
+  monitoredContacts  MonitoredContact[]
+  pixReceipts        PixReceipt[]
+  warnings           Warning[]
+  accountsReceivable AccountReceivable[]
+
+  @@map("clients")
+}
+
+model PhoneClient {
+  id          String @id @default(uuid()) @db.Uuid
+  clientId    String @map("client_id") @db.Uuid
+  dialCode    String @map("dial_code")
+  phoneNumber String @map("phone_number")
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@map("phone_client")
+}
+
+model MonitoredContact {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  clientId  String   @map("client_id") @db.Uuid
+  phoneJid  String   @map("phone_jid")
+  isActive  Boolean? @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@map("monitored_contacts")
+}
+
+model PixReceipt {
+  id                             String    @id @default(uuid()) @db.Uuid
+  userId                         String    @map("user_id") @db.Uuid
+  clientId                       String?   @map("client_id") @db.Uuid
+  status                         String?
+  origin                         String?
+  documentFormat                 String?   @map("document_format")
+  description                    String?
+  depositDateTime                DateTime? @map("deposit_date_time")
+  depositAmount                  Decimal?  @map("deposit_amount") @db.Decimal
+  depositOriginName              String?   @map("deposit_origin_name")
+  depositOriginDocument          String?   @map("deposit_origin_document")
+  depositOriginDocumentType      String?   @map("deposit_origin_document_type")
+  depositOriginBank              String?   @map("deposit_origin_bank")
+  depositOriginAgency            String?   @map("deposit_origin_agency")
+  depositOriginAccount           String?   @map("deposit_origin_account")
+  depositDestinationName         String?   @map("deposit_destination_name")
+  depositDestinationDocument     String?   @map("deposit_destination_document")
+  depositDestinationDocumentType String?   @map("deposit_destination_document_type")
+  depositDestinationBank         String?   @map("deposit_destination_bank")
+  depositDestinationAgency       String?   @map("deposit_destination_agency")
+  depositDestinationAccount      String?   @map("deposit_destination_account")
+  pixTransactionId               String?   @map("pix_transaction_id")
+  processmentOcrOutcome          String?   @map("processment_ocr_outcome") @db.Text
+  jid                            String?
+  messageId                      String?   @map("message_id")
+  isDeletedWhatsapp              Boolean?  @map("is_deleted_whatsapp")
+  createdAt                      DateTime  @default(now()) @map("created_at")
+  updatedAt                      DateTime  @updatedAt @map("updated_at")
+
+  user               User              @relation(fields: [userId], references: [id])
+  client             Client?           @relation(fields: [clientId], references: [id])
+  blob               PixReceiptBlob[]
+  warnings           Warning[]
+  accountsReceivable AccountReceivable[]
+
+  @@map("pix_receipts")
+}
+
+model PixReceiptBlob {
+  id            String  @id @default(uuid()) @db.Uuid
+  pixReceiptsId String? @map("pix_receipts_id") @db.Uuid
+  mimeType      String? @map("mime_type")
+  filePath      String? @map("file_path")
+  fileUrl       String? @map("file_url")
+
+  pixReceipt PixReceipt? @relation(fields: [pixReceiptsId], references: [id])
+
+  @@map("pix_receipts_blob")
+}
+
+model Warning {
+  id               String    @id @default(uuid()) @db.Uuid
+  pixReceiptId     String    @map("pix_receipt_id") @db.Uuid
+  clientId         String?   @map("client_id") @db.Uuid
+  type             String
+  message          String
+  resolved         Boolean?
+  resolutionReason String?   @map("resolution_reason")
+  resolvedAt       DateTime? @map("resolved_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  pixReceipt PixReceipt @relation(fields: [pixReceiptId], references: [id])
+  client     Client?    @relation(fields: [clientId], references: [id])
+
+  @@map("warnings")
+}
+
+model AccountReceivable {
+  id                   String    @id @default(uuid()) @db.Uuid
+  userId               String    @map("user_id") @db.Uuid
+  pixReceiptId         String?   @map("pix_receipt_id") @db.Uuid
+  clientId             String    @map("client_id") @db.Uuid
+  descriptionService   String?   @map("description_service")
+  totalAmount          Decimal   @map("total_amount") @db.Decimal
+  installmentGroupId   String?   @map("installment_group_id") @db.Uuid
+  installmentCount     Int?      @map("installment_count")
+  installmentNumber    Int?      @map("installment_number")
+  installmentAmount    Decimal   @map("installment_amount") @db.Decimal
+  dueDate              DateTime  @map("due_date") @db.Date
+  status               String?
+  paidAt               DateTime? @map("paid_at")
+  payStub              String?   @map("pay_stub")
+  matchedAutomatically Boolean?  @map("matched_automatically")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  user       User        @relation(fields: [userId], references: [id])
+  pixReceipt PixReceipt? @relation(fields: [pixReceiptId], references: [id])
+  client     Client      @relation(fields: [clientId], references: [id])
+
+  @@map("accounts_receivable")
 }
