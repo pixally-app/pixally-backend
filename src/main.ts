@@ -11,6 +11,7 @@ async function bootstrap() {
     .setTitle('Pixally API')
     .setDescription('API para gerenciamento de comprovantes PIX')
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
