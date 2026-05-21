@@ -1,6 +1,8 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
+import { ErrorResponseDto } from './dto/login-error-response.dto.js';
+import { LoginResponseDto } from './dto/login-response.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 
 @ApiTags('Auth')
@@ -10,8 +12,8 @@ export class AuthController {
 
   @Post('login')
   @ApiOperation({ summary: 'Autenticar usuário' })
-  @ApiResponse({ status: 200, description: 'Login realizado com sucesso' })
-  @ApiResponse({ status: 401, description: 'Credenciais inválidas' })
+  @ApiResponse({ status: 200, description: 'Login realizado com sucesso', type: LoginResponseDto })
+  @ApiResponse({ status: 401, description: 'Credenciais inválidas', type: ErrorResponseDto })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
   }
