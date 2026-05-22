@@ -3,6 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import type { StringValue } from 'ms';
+import { AuthController } from './auth.controller.js';
+import { AuthService } from './auth.service.js';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import type { StringValue } from 'ms';
       inject: [ConfigService],
     }),
   ],
+  controllers: [AuthController],
+  providers: [AuthService],
   exports: [JwtModule, PassportModule],
 })
 export class AuthModule {}
