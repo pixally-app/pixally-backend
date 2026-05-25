@@ -192,7 +192,7 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-CON-003-07 | Data de vencimento em formato inválido | Token + data = 'abc' | Mensagem de validação | 400 |
 | CT-CON-003-08 | Conta inexistente | Token + ID inválido | Mensagem: não encontrado | 404 |
 | CT-CON-003-09 | Conta de outro usuário | Token + ID de outro usuário | Acesso negado | 403 |
-| CT-CON-003-10 | Sem autenticação | Sem token | Acesso negado | 400 |
+| CT-CON-003-10 | Sem autenticação | Sem token | Acesso negado | 401 |
 
 ### 6.4 Módulo de Comprovantes
 
