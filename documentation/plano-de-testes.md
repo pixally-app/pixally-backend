@@ -1,0 +1,277 @@
+# Plano de Testes
+
+**Sistema Inteligente para Processamento e Análise de Comprovantes PIX com Inteligência Artificial**
+
+## 1. Identificação do Documento
+
+|  |  |
+|---|---|
+| **Projeto** | Sistema PIX Comprovantes |
+| **Versão** | 1.0 |
+| **Data de criação** | Maio/2026 |
+| **Responsável** | Danielle Silva de Melo |
+| **Orientador** | Wesley Jhonnes Ramos Rolim |
+| **Tecnologias** | NestJS, Next.js, TypeScript, PostgreSQL, Prisma |
+
+## 2. Introdução
+
+O sistema proposto tem como objetivo automatizar o processamento e a conciliação de comprovantes PIX recebidos via WhatsApp por microempreendedores individuais (MEIs), eliminando a conferência manual e proporcionando controle financeiro acessível. O sistema permite o cadastro e gerenciamento de clientes e contas a receber, utilizando técnicas de OCR e Inteligência Artificial para extrair, validar e conciliar os dados dos comprovantes recebidos, oferecendo um painel de controle com visão consolidada dos recebimentos, alertas de duplicidade e situação de inadimplência.
+
+Este plano de testes descreve os cenários, critérios de aceitação e verificações que serão aplicados às funcionalidades principais do sistema, visando assegurar o funcionamento correto das rotas da API, a integridade dos dados financeiros e a precisão do processamento dos comprovantes PIX.
+
+## 3. Escopo dos Testes
+
+### 3.1 Funcionalidades Incluídas no Escopo
+
+- Módulo de Autenticação (registro, login, recuperação de senha)
+- Módulo de Clientes (CRUD completo)
+- Módulo de Contas a Receber (CRUD + filtros por status)
+- Módulo de Comprovantes (upload, extração OCR, validação por IA)
+- Módulo de Conciliação (conciliação automática, detecção de duplicidade)
+- Módulo de Dashboard (resumo de recebimentos, inadimplentes, alertas)
+- Segurança (autenticação JWT, proteção de rotas, CORS)
+
+### 3.2 Funcionalidades Fora do Escopo
+
+- Integração com WhatsApp Business API (dependência de serviço externo)
+- Integração com API de instituições financeiras (dependência de serviço externo)
+- Testes de performance e carga
+- Testes de acessibilidade
+- Testes em dispositivos móveis
+
+## 4. Objetivos dos Testes
+
+Os testes têm como objetivos principais:
+
+- Validar que todas as rotas da API respondem corretamente nos cenários esperados e inesperados
+- Garantir que a extração de dados dos comprovantes PIX por OCR e IA funciona corretamente
+- Verificar que a detecção de comprovantes duplicados opera com precisão
+- Confirmar que a conciliação automática entre comprovantes e contas a receber está correta
+- Assegurar que rotas protegidas rejeitam acessos não autenticados
+- Atingir cobertura mínima de 70% das funcionalidades com testes de endpoint
+
+## 5. Estratégia de Testes
+
+### 5.1 Tipos de Testes
+
+| Tipo de Testes | Ferramentas | Módulo Cobertos | Prioridade |
+|---|---|---|---|
+| Testes de Endpoint | Jest + Supertest | Todos os módulos | Alta |
+| Testes Unitários | Jest | Conciliação, OCR, IA, Duplicidade | Alta |
+| Testes E2E | Cypress | Fluxos principais do frontend | Média |
+
+### 5.2 Abordagem
+
+Os testes de endpoint serão desenvolvidos utilizando Jest combinado com Supertest, testando diretamente as rotas da API NestJS sem a necessidade de subir um servidor externo. Para cada rota serão contemplados no mínimo três cenários: sucesso, falha por dados inválidos e falha por ausência de autenticação.
+
+Os testes unitários serão focados nas funcionalidades mais complexas do sistema, especialmente no serviço de extração OCR com IA generativa, na lógica de detecção de duplicidade de comprovantes e no motor de conciliação financeira. Esses serviços serão testados de forma isolada, utilizando mocks para as dependências externas.
+
+## 6. Casos de Teste
+
+### 6.1 Módulo de Autenticação
+
+#### CT-AUTH-001 — POST /auth/register
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-AUTH-001-01 | Cadastro com dados válidos | nome, email, documento, telefone e senha válidos | Usuário criado, retorna dados do usuário | 201 |
+| CT-AUTH-001-02 | Email já cadastrado | Email existente no banco | Mensagem de erro: email já cadastrado | 409 |
+| CT-AUTH-001-03 | Campo email ausente | Sem campo email | Mensagem de validação | 400 |
+| CT-AUTH-001-04 | Campo documento ausente | Sem campo documento | Mensagem de validação | 400 |
+| CT-AUTH-001-05 | Campo telefone ausente | Sem campo telefone | Mensagem de validação | 400 |
+| CT-AUTH-001-06 | Campo senha ausente | Sem campo senha | Mensagem de validação | 400 |
+| CT-AUTH-001-07 | Email em formato inválido | email = 'emailinvalido' | Mensagem de validação | 400 |
+| CT-AUTH-001-08 | Senha abaixo do mínimo | senha com menos de 6 caracteres | Mensagem de validação | 400 |
+| CT-AUTH-001-09 | Senha sem letra maiúscula | senha = 'abc@123' | Mensagem de validação | 400 |
+| CT-AUTH-001-10 | Senha sem caractere especial | senha = 'Abc1234' | Mensagem de validação | 400 |
+| CT-AUTH-001-11 | Senha sem número | senha = 'Abc@def' | Mensagem de validação | 400 |
+
+#### CT-AUTH-002 — POST /auth/login
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-AUTH-002-01 | Login com credenciais válidas | email e senha corretos | Retorna access_token JWT | 200 |
+| CT-AUTH-002-02 | Email incorreto | email errado, senha correta | Mensagem: Email ou senha inválidos | 401 |
+| CT-AUTH-002-03 | Senha incorreta | email correto, senha errada | Mensagem: Email ou senha inválidos | 401 |
+| CT-AUTH-002-04 | Email não cadastrado | email inexistente | Email ou senha inválidos | 401 |
+| CT-AUTH-002-05 | Campo email ausente | Sem campo email | Mensagem de validação | 400 |
+| CT-AUTH-002-06 | Campo senha ausente | Sem campo senha | Mensagem de validação | 400 |
+| CT-AUTH-002-07 | Corpo da requisição vazio | Body vazio {} | Mensagem de validação | 400 |
+
+#### CT-AUTH-003 — POST /auth/forgot-password
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-AUTH-003-01 | Email cadastrado válido | email existente no banco | Mensagem de confirmação de envio | 200 |
+| CT-AUTH-003-02 | Email não cadastrado | email inexistente | Mensagem: email não encontrado | 404 |
+| CT-AUTH-003-03 | Email em formato inválido | email = 'invalido' | Mensagem de validação | 400 |
+| CT-AUTH-003-04 | Campo email ausente | Body vazio | Mensagem de validação | 400 |
+
+### 6.2 Módulo de Clientes
+
+#### CT-CLI-001 — POST /clients
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CLI-001-01 | Cadastro válido autenticado | Token válido + dados completos | Cliente criado com sucesso | 201 |
+| CT-CLI-001-02 | Requisição sem autenticação | Sem token JWT | Acesso negado | 401 |
+| CT-CLI-001-03 | Nome ausente | Token válido, sem nome | Mensagem de validação | 400 |
+| CT-CLI-001-04 | Documento ausente | Token válido, sem documento | Mensagem de validação | 400 |
+| CT-CLI-001-05 | Telefone em formato inválido | Token válido, telefone inválido | Mensagem de validação | 400 |
+
+#### CT-CLI-002 — GET /clients
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CLI-002-01 | Listar todos autenticado | Token válido | Lista de clientes do usuário | 200 |
+| CT-CLI-002-02 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-CLI-002-03 | Usuário sem clientes | Token válido, banco vazio | Lista vazia [] | 200 |
+
+#### CT-CLI-003 — GET /clients/:id
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CLI-003-01 | Cliente existente | Token válido + ID válido | Dados do cliente | 200 |
+| CT-CLI-003-02 | Cliente inexistente | Token válido + ID inválido | Mensagem: não encontrado | 404 |
+| CT-CLI-003-03 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-CLI-003-04 | Cliente de outro usuário | Token válido + ID de outro usuário | Acesso negado | 403 |
+
+#### CT-CLI-004 — PUT /clients/:id
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CLI-004-01 | Atualização válida | Token válido + dados válidos | Cliente atualizado | 200 |
+| CT-CLI-004-02 | Cliente inexistente | Token válido + ID inválido | Mensagem: não encontrado | 404 |
+| CT-CLI-004-03 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-CLI-005 — DELETE /clients/:id
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CLI-005-01 | Remoção válida | Token válido + ID existente | Cliente removido | 200 |
+| CT-CLI-005-02 | Cliente inexistente | Token válido + ID inválido | Mensagem: não encontrado | 404 |
+| CT-CLI-005-03 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+### 6.3 Módulo de Contas a Receber
+
+#### CT-CON-001 — POST /accounts-receivable
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CON-001-01 | Criação válida | Token + cliente_id + valor + descrição + vencimento | Conta criada | 201 |
+| CT-CON-001-02 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-CON-001-03 | Cliente inexistente | Token + cliente_id inválido | Mensagem: cliente não encontrado | 404 |
+| CT-CON-001-04 | Valor inválido (negativo) | Token + valor = -100 | Mensagem de validação | 400 |
+| CT-CON-001-05 | Data de vencimento no passado | Token + vencimento passado | Mensagem de validação | 400 |
+| CT-CON-001-06 | Campos obrigatórios ausentes | Token + body incompleto | Mensagem de validação | 400 |
+| CT-CON-001-07 | Criar conta parcelada válida | Token + valor + parcelas = 3 | Conta criada com o valor parcelado | 201 |
+| CT-CON-001-08 | Número de parcelas inválido (zero) | Token + parcelas = 0 | Mensagem de validação | 400 |
+| CT-CON-001-09 | Número de parcelas negativo | Token + parcelas = -2 | Mensagem de validação | 400 |
+
+#### CT-CON-002 — GET /accounts-receivable (com filtros)
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CON-002-01 | Listar todas | Token válido | Lista de contas do usuário | 200 |
+| CT-CON-002-02 | Filtrar por status=pendente | Token + ?status=pendente | Apenas contas pendentes | 200 |
+| CT-CON-002-03 | Filtrar por status=conciliados | Token + ?status=conciliados | Apenas contas pagas | 200 |
+| CT-CON-002-04 | Filtrar por status=vencido | Token + ?status=vencido | Apenas contas vencidas | 200 |
+| CT-CON-002-05 | Status inválido | Token + ?status=invalido | Mensagem de validação | 400 |
+| CT-CON-002-06 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-CON-003 — PUT /accounts-receivable/:id
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CON-003-01 | Atualizar valor com dados válidos | Token + valor novo válido | Conta atualizada com novo valor | 200 |
+| CT-CON-003-02 | Atualizar descrição com dados válidos | Token + nova descrição | Conta atualizada com nova descrição | 200 |
+| CT-CON-003-03 | Atualizar data de vencimento com dados válidos | Token + nova data futura | Conta atualizada com nova data | 200 |
+| CT-CON-003-04 | Atualizar todos os campos simultaneamente | Token + valor + descrição + data | Todos os campos atualizados | 200 |
+| CT-CON-003-05 | Atualizar status para conciliado manualmente | Token + status = 'conciliado' | Conta marcada como paga | 200 |
+| CT-CON-003-06 | Valor inválido (negativo) | Token + valor = -50 | Mensagem de validação | 400 |
+| CT-CON-003-07 | Data de vencimento em formato inválido | Token + data = 'abc' | Mensagem de validação | 400 |
+| CT-CON-003-08 | Conta inexistente | Token + ID inválido | Mensagem: não encontrado | 404 |
+| CT-CON-003-09 | Conta de outro usuário | Token + ID de outro usuário | Acesso negado | 403 |
+| CT-CON-003-10 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+### 6.4 Módulo de Comprovantes
+
+#### CT-COMP-001 — POST /receipts/upload
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-COMP-001-01 | Upload de imagem válida | Token + arquivo PNG/JPG/PDF de comprovante | Dados extraídos: valor, data, pagador, banco, ID transação | 201 |
+| CT-COMP-001-02 | Imagem sem dados reconhecíveis | Token + imagem aleatória | Mensagem: não foi possível extrair dados | 422 |
+| CT-COMP-001-03 | Formato de arquivo inválido | Token + arquivo inválido | Mensagem de validação de formato | 400 |
+| CT-COMP-001-04 | Sem arquivo anexado | Token + body vazio | Mensagem de validação | 400 |
+| CT-COMP-001-05 | Sem autenticação | Sem token + imagem | Acesso negado | 401 |
+| CT-COMP-001-06 | Imagem com baixa resolução | Token + imagem de baixa qualidade | Dados parcialmente extraídos ou erro | 422 |
+| CT-COMP-001-07 | Comprovante duplicado | Token + imagem já enviada anteriormente | Alerta de duplicidade retornado | 200 |
+
+#### CT-COMP-002 — GET /receipts
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-COMP-002-01 | Listar todos autenticado | Token válido | Lista de comprovantes | 200 |
+| CT-COMP-002-02 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-COMP-002-03 | Sem comprovantes cadastrados | Token válido, banco vazio | Lista vazia [] | 200 |
+
+### 6.5 Módulo de Dashboard
+
+#### CT-DASH-001
+
+| ID | Cenário | Endpoint | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-DASH-001-01 | Resumo de recebimentos autenticado | GET /dashboard/resumo | Total pendente, total conciliado mensal, total vencido, total comprovantes mensal | 200 |
+| CT-DASH-001-02 | Resumo sem autenticação | GET /dashboard/resumo | Acesso negado | 401 |
+| CT-DASH-001-03 | Resumo dos recebidos nos últimos 7 dias | GET /dashboard/graphic | Dados e data dos últimos recebidos | 200 |
+
+## 7. Testes Unitários
+
+### 7.1 Serviço de Extração OCR + IA
+
+| ID | Cenário | Entrada | Saída Esperada |
+|---|---|---|---|
+| TU-OCR-001 | Extrair valor de comprovante válido | Mock de imagem com valor R$ 150,00 | valor: 150.00 |
+| TU-OCR-002 | Extrair data de comprovante válido | Mock de imagem com data 01/05/2026 | data: '2026-05-01' |
+| TU-OCR-003 | Extrair nome do pagador | Mock de imagem com nome 'João Silva' | pagador: 'João Silva' |
+| TU-OCR-004 | Extrair identificador da transação | Mock de imagem com ID de transação | idTransacao: 'xxx-xxx-xxx' |
+| TU-OCR-005 | Imagem ilegível lança exceção | Mock de imagem corrompida | Mensagem de validação |
+| TU-OCR-006 | Imagem sem dados PIX lança exceção | Mock de imagem de paisagem | Mensagem de validação |
+
+### 7.2 Serviço de Conciliação
+
+| ID | Cenário | Entrada | Saída Esperada |
+|---|---|---|---|
+| TU-CONC-001 | Valores iguais conciliam corretamente | Comprovante R$ 200 + Conta R$ 200 | status: 'conciliado' |
+| TU-CONC-002 | Valores divergentes geram alerta | Comprovante R$ 150 + Conta R$ 200 | status: 'divergente', diferenca: 50 |
+| TU-CONC-003 | Conta vencida é marcada como inadimplente | Conta com vencimento no passado | status: 'vencido' |
+| TU-CONC-004 | Conta paga não pode ser conciliada novamente | Conta com status 'pago' | Mensagem de validação |
+
+## 8. Critérios de Aceite e Saída
+
+### 8.1 Critérios de Entrada
+
+- Ambiente de testes configurado e funcionando
+- Todas as rotas implementadas e documentadas no Swagger
+- Variáveis de ambiente .env.test configuradas
+
+### 8.2 Critérios de Aceite
+
+- Cobertura mínima de 70% das funcionalidades por testes de endpoint
+- 100% dos testes unitários das funcionalidades críticas passando
+- Nenhum teste de cenário de segurança (401/403) falhando
+- Detecção de duplicidade funcionando corretamente
+- Conciliação financeira retornando resultados corretos
+
+### 8.3 Critérios de Saída
+
+- Todos os casos de teste executados
+- Defeitos críticos e de alta prioridade corrigidos e retestados
+- Relatório de cobertura de testes gerado pelo Jest
+
+## 9. Referências
+
+**SON, Hannah.** How To Create A Test Plan: Steps, Examples, & Template. Testrail, 2026. Disponível em: https://www.testrail.com/blog/create-a-test-plan/. Acesso em: 22 maio 2026
+
+**Free Test Plan Template.** Atlassian, [s.d.]. Disponível em: https://www.atlassian.com/software/confluence/resources/guides/how-to/test-plan. Acesso em: 22 maio 2026
