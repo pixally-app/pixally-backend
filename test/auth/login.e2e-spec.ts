@@ -6,13 +6,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { faker } from '@faker-js/faker';
 import * as bcrypt from 'bcrypt';
 import request from 'supertest';
-import { App } from 'supertest/types.js';
 import { AuthController } from '../../src/auth/auth.controller.js';
 import { AuthService } from '../../src/auth/auth.service.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
 
 describe('POST /auth/login (CT-AUTH-002)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication;
   let prismaService: { user: { findUnique: jest.Mock<any> } };
 
   const plainPassword = 'Test@1234';
