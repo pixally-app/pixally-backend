@@ -4,6 +4,7 @@ import { AuthService } from './auth.service.js';
 import { UnauthorizedResponseDto } from './dto/login-error-response.dto.js';
 import { LoginResponseDto } from './dto/login-response.dto.js';
 import { LoginDto } from './dto/login.dto.js';
+import { BadRequestResponseDto, ConflictResponseDto } from './dto/register-error-response.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 
 @ApiTags('Auth')
@@ -24,8 +25,8 @@ export class AuthController {
   @HttpCode(201)
   @ApiOperation({ summary: 'Registrar novo usuário' })
   @ApiResponse({ status: 201, description: 'Usuário registrado com sucesso', type: LoginResponseDto })
-  @ApiResponse({ status: 409, description: 'Email ou documento já cadastrado' })
-  @ApiResponse({ status: 400, description: 'Dados inválidos' })
+  @ApiResponse({ status: 409, description: 'Email ou documento já cadastrado', type: ConflictResponseDto })
+  @ApiResponse({ status: 400, description: 'Dados inválidos', type: BadRequestResponseDto })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
