@@ -4,7 +4,7 @@ export class ConflictResponseDto {
   @ApiProperty({ example: 409 })
   statusCode: number;
 
-  @ApiProperty({ example: 'Email already registered' })
+  @ApiProperty({ example: 'Email already registered', description: 'Pode ser "Email already registered" ou "Document already registered"' })
   message: string;
 
   @ApiProperty({ example: 'Conflict' })

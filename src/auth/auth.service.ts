@@ -54,23 +54,34 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.prisma.user.create({
-      data: {
-        username: dto.username,
-        email: dto.email,
-        password: hashedPassword,
-        document: dto.document,
-        phone: dto.phone,
-        role: dto.role ?? 'user',
-        isActive: true,
-      },
-    });
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          username: dto.username,
+          email: dto.email,
+          password: hashedPassword,
+          document: dto.document,
+          phone: dto.phone,
+          role: 'user',
+          isActive: true,
+        },
+      });
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
-    const accessToken = await this.jwtService.signAsync(payload);
+      const payload = { sub: user.id, email: user.email, role: user.role };
+      const accessToken = await this.jwtService.signAsync(payload);
 
-    const { password: _, ...userWithoutPassword } = user;
+      const { password: _, ...userWithoutPassword } = user;
 
-    return { user: userWithoutPassword, access_token: accessToken };
+      return { user: userWithoutPassword, access_token: accessToken };
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        const field = error.meta?.target?.[0];
+        if (field === 'document') {
+          throw new ConflictException('Document already registered');
+        }
+        throw new ConflictException('Email already registered');
+      }
+      throw error;
+    }
   }
 }
