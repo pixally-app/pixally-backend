@@ -63,7 +63,7 @@ describe('POST /auth/login (CT-AUTH-002)', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   it('CT-AUTH-002-01 - should return 200 and a JWT access_token with valid credentials', async () => {
