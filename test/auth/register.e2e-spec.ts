@@ -59,7 +59,7 @@ describe('POST /auth/register (CT-AUTH-001)', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   it('CT-AUTH-001-01 - should return 201 and user data with valid registration', async () => {
