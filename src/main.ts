@@ -11,7 +11,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.get<string>('CORS_ORIGIN', '*'),
   });
-  app.useGlobalPipes(new ValidationPipe());
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
 
   if (configService.get<string>('NODE_ENV') !== 'production') {
     const config = new DocumentBuilder()

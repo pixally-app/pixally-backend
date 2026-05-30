@@ -6,6 +6,7 @@ import type { StringValue } from 'ms';
 import { EmailModule } from '../email/email.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { JwtStrategy } from './jwt.strategy.js';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { AuthService } from './auth.service.js';
     EmailModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, JwtStrategy],
   exports: [JwtModule, PassportModule],
 })
 export class AuthModule {}
