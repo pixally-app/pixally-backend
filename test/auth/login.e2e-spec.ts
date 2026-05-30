@@ -9,6 +9,7 @@ import request from 'supertest';
 import { AuthController } from '../../src/auth/auth.controller.js';
 import { AuthService } from '../../src/auth/auth.service.js';
 import { PrismaService } from '../../src/prisma/prisma.service.js';
+import { EmailService } from '../../src/email/email.service.js';
 
 describe('POST /auth/login (CT-AUTH-002)', () => {
   let app: INestApplication;
@@ -50,6 +51,7 @@ describe('POST /auth/login (CT-AUTH-002)', () => {
       providers: [
         AuthService,
         { provide: PrismaService, useValue: prismaService },
+        { provide: EmailService, useValue: { sendResetPasswordEmail: jest.fn() } },
       ],
     }).compile();
 
