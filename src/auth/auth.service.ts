@@ -1,7 +1,7 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EmailService } from '../email/email.service.js';
 import { LoginDto } from './dto/login.dto.js';
@@ -96,16 +96,22 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new NotFoundException('Email not found');
+      return { message: 'Password reset email sent successfully' };
     }
 
     const token = randomUUID();
+    const hashedToken = createHash('sha256').update(token).digest('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, used: false },
+      data: { used: true },
+    });
 
     await this.prisma.passwordResetToken.create({
       data: {
         userId: user.id,
-        token,
+        token: hashedToken,
         expiresAt,
       },
     });
@@ -116,8 +122,10 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
+    const hashedToken = createHash('sha256').update(dto.token).digest('hex');
+
     const resetToken = await this.prisma.passwordResetToken.findUnique({
-      where: { token: dto.token },
+      where: { token: hashedToken },
     });
 
     if (!resetToken) {
@@ -139,8 +147,8 @@ export class AuthService {
       data: { password: hashedPassword },
     });
 
-    await this.prisma.passwordResetToken.update({
-      where: { id: resetToken.id },
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: resetToken.userId, used: false },
       data: { used: true },
     });
 

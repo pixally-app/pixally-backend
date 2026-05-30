@@ -37,7 +37,6 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Solicitar recuperação de senha' })
   @ApiResponse({ status: 200, description: 'Email de recuperação enviado com sucesso' })
-  @ApiResponse({ status: 404, description: 'Email não encontrado' })
   @ApiResponse({ status: 400, description: 'Dados inválidos', type: BadRequestResponseDto })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
