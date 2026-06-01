@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type { ClientWhereInput } from '../../generated/prisma/models/Client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ListClientsQueryDto } from './dto/list-clients-query.dto.js';
@@ -81,6 +81,51 @@ export class ClientsService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async findOne(userId: string, clientId: string) {
+    const client = await this.prisma.client.findFirst({
+      where: { id: clientId, userId, deletedAt: null },
+      include: {
+        _count: {
+          select: { pixReceipts: true },
+        },
+        accountsReceivable: {
+          select: {
+            installmentAmount: true,
+            paidAt: true,
+          },
+        },
+      },
+    });
+
+    if (!client) {
+      throw new NotFoundException('Client not found');
+    }
+
+    const { _count, accountsReceivable, deletedAt, amount, ...rest } = client;
+
+    let totalReceived = 0;
+    let totalReceivable = 0;
+
+    for (const ar of accountsReceivable) {
+      const value = Number(ar.installmentAmount);
+      if (ar.paidAt) {
+        totalReceived += value;
+      } else {
+        totalReceivable += value;
+      }
+    }
+
+    return {
+      ...rest,
+      documentType: rest.documentType ?? '',
+      status: rest.status ?? false,
+      phones: rest.phones ?? '',
+      receiptsCount: _count.pixReceipts,
+      totalReceived,
+      totalReceivable,
     };
   }
 }

@@ -1,10 +1,10 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { ClientsService } from './clients.service.js';
 import { ListClientsQueryDto } from './dto/list-clients-query.dto.js';
-import { PaginatedClientsResponseDto } from './dto/client-response.dto.js';
+import { ClientResponseDto, PaginatedClientsResponseDto } from './dto/client-response.dto.js';
 
 @ApiTags('Clients')
 @Controller('clients')
@@ -22,5 +22,17 @@ export class ClientsController {
     @Query() query: ListClientsQueryDto,
   ) {
     return this.clientsService.findAll(user.userId, query);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Buscar cliente por ID' })
+  @ApiResponse({ status: 200, description: 'Dados do cliente', type: ClientResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado - token JWT inválido ou ausente' })
+  @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
+  findOne(
+    @CurrentUser() user: { userId: string; email: string; role: string },
+    @Param('id') id: string,
+  ) {
+    return this.clientsService.findOne(user.userId, id);
   }
 }
