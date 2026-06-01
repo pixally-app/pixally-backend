@@ -1,8 +1,9 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { ClientsService } from './clients.service.js';
+import { CreateClientDto } from './dto/create-client.dto.js';
 import { ListClientsQueryDto } from './dto/list-clients-query.dto.js';
 import { ClientResponseDto, PaginatedClientsResponseDto } from './dto/client-response.dto.js';
 
@@ -34,5 +35,19 @@ export class ClientsController {
     @Param('id') id: string,
   ) {
     return this.clientsService.findOne(user.userId, id);
+  }
+
+  @Post()
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Criar novo cliente' })
+  @ApiResponse({ status: 201, description: 'Cliente criado com sucesso', type: ClientResponseDto })
+  @ApiResponse({ status: 400, description: 'Dados inválidos' })
+  @ApiResponse({ status: 401, description: 'Não autorizado - token JWT inválido ou ausente' })
+  @ApiResponse({ status: 409, description: 'Documento ou telefone já cadastrado' })
+  create(
+    @CurrentUser() user: { userId: string; email: string; role: string },
+    @Body() dto: CreateClientDto,
+  ) {
+    return this.clientsService.create(user.userId, dto);
   }
 }

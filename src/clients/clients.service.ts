@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { ClientWhereInput } from '../../generated/prisma/models/Client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CreateClientDto } from './dto/create-client.dto.js';
 import { ListClientsQueryDto } from './dto/list-clients-query.dto.js';
 
 @Injectable()
@@ -126,6 +127,57 @@ export class ClientsService {
       receiptsCount: _count.pixReceipts,
       totalReceived,
       totalReceivable,
+    };
+  }
+
+  async create(userId: string, dto: CreateClientDto) {
+    const existingClient = await this.prisma.client.findFirst({
+      where: { userId, document: dto.document, deletedAt: null },
+    });
+
+    if (existingClient) {
+      throw new ConflictException(`Document ${dto.document} already registered for this user`);
+    }
+
+    if (dto.phones?.length) {
+      const phoneNumbers = dto.phones.map((p) => p.phoneNumber);
+      const existingPhone = await this.prisma.phoneClient.findFirst({
+        where: { phoneNumber: { in: phoneNumbers } },
+      });
+
+      if (existingPhone) {
+        throw new ConflictException(`Phone number ${existingPhone.phoneNumber} already in use`);
+      }
+    }
+
+    const client = await this.prisma.client.create({
+      data: {
+        userId,
+        name: dto.name,
+        document: dto.document,
+        documentType: dto.documentType,
+        status: dto.status ?? true,
+        phoneClients: dto.phones?.length
+          ? {
+              create: dto.phones.map((p) => ({
+                dialCode: p.dialCode,
+                phoneNumber: p.phoneNumber,
+              })),
+            }
+          : undefined,
+      },
+      include: {
+        phoneClients: true,
+      },
+    });
+
+    const { deletedAt, amount, phoneClients, ...rest } = client;
+
+    return {
+      ...rest,
+      documentType: rest.documentType ?? '',
+      status: rest.status ?? false,
+      phones: phoneClients,
     };
   }
 }
