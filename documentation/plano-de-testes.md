@@ -118,6 +118,8 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-CLI-001-03 | Nome ausente | Token válido, sem nome | Mensagem de validação | 400 |
 | CT-CLI-001-04 | Documento ausente | Token válido, sem documento | Mensagem de validação | 400 |
 | CT-CLI-001-05 | Telefone em formato inválido | Token válido, telefone inválido | Mensagem de validação | 400 |
+| CT-CLI-001-06 | Documento duplicado para o mesmo usuário | Token válido + documento já cadastrado | Mensagem: documento já registrado | 409 |
+| CT-CLI-001-07 | Telefone já cadastrado | Token válido + telefone já existente | Mensagem: telefone já registrado | 409 |
 
 #### CT-CLI-002 — GET /clients
 
@@ -126,6 +128,9 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-CLI-002-01 | Listar todos autenticado | Token válido | Lista de clientes do usuário | 200 |
 | CT-CLI-002-02 | Sem autenticação | Sem token | Acesso negado | 401 |
 | CT-CLI-002-03 | Usuário sem clientes | Token válido, banco vazio | Lista vazia [] | 200 |
+| CT-CLI-002-04 | Filtrar por nome | Token válido + ?name=João | Lista filtrada por nome | 200 |
+| CT-CLI-002-05 | Filtrar por documento | Token válido + ?document=12345678900 | Lista filtrada por documento (busca exata) | 200 |
+| CT-CLI-002-06 | Filtrar por status | Token válido + ?status=true | Lista filtrada por status ativo | 200 |
 
 #### CT-CLI-003 — GET /clients/:id
 
@@ -134,7 +139,7 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-CLI-003-01 | Cliente existente | Token válido + ID válido | Dados do cliente | 200 |
 | CT-CLI-003-02 | Cliente inexistente | Token válido + ID inválido | Mensagem: não encontrado | 404 |
 | CT-CLI-003-03 | Sem autenticação | Sem token | Acesso negado | 401 |
-| CT-CLI-003-04 | Cliente de outro usuário | Token válido + ID de outro usuário | Acesso negado | 403 |
+| CT-CLI-003-04 | Cliente de outro usuário | Token válido + ID de outro usuário | Não encontrado | 404 |
 
 #### CT-CLI-004 — PATCH /clients/:id
 
@@ -143,12 +148,19 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-CLI-004-01 | Atualização válida | Token válido + dados válidos | Cliente atualizado | 200 |
 | CT-CLI-004-02 | Cliente inexistente | Token válido + ID inválido | Mensagem: não encontrado | 404 |
 | CT-CLI-004-03 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-CLI-004-04 | Documento duplicado | Token válido + documento já cadastrado por outro cliente | Mensagem: documento já registrado | 409 |
+| CT-CLI-004-05 | Criar novo telefone | Token válido + phone sem id | Telefone criado, cliente atualizado | 200 |
+| CT-CLI-004-06 | Atualizar telefone existente | Token válido + phone com id existente | Telefone atualizado, cliente atualizado | 200 |
+| CT-CLI-004-07 | Novo telefone sem campos obrigatórios | Token válido + phone sem id e sem phoneNumber | Mensagem: dialCode e phoneNumber obrigatórios | 400 |
+| CT-CLI-004-08 | Atualizar telefone só com phoneNumber | Token válido + phone com id e phoneNumber (sem dialCode) | dialCode resolvido do existente, telefone atualizado | 200 |
+| CT-CLI-004-09 | Telefone duplicado no update | Token válido + phone com número já cadastrado | Mensagem: telefone já registrado | 409 |
+| CT-CLI-004-10 | ID de telefone inexistente para o cliente | Token válido + phone com id inválido | Mensagem: telefone não encontrado | 404 |
 
 #### CT-CLI-005 — DELETE /clients/:id
 
 | ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
-| CT-CLI-005-01 | Remoção válida | Token válido + ID existente | Cliente removido | 200 |
+| CT-CLI-005-01 | Remoção válida (soft delete) | Token válido + ID existente | Cliente removido (deletedAt preenchido) | 204 |
 | CT-CLI-005-02 | Cliente inexistente | Token válido + ID inválido | Mensagem: não encontrado | 404 |
 | CT-CLI-005-03 | Sem autenticação | Sem token | Acesso negado | 401 |
 
