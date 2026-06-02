@@ -136,7 +136,7 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-CLI-003-03 | Sem autenticação | Sem token | Acesso negado | 401 |
 | CT-CLI-003-04 | Cliente de outro usuário | Token válido + ID de outro usuário | Acesso negado | 403 |
 
-#### CT-CLI-004 — PUT /clients/:id
+#### CT-CLI-004 — PATCH /clients/:id
 
 | ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
