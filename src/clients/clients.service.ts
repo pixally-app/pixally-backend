@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { ClientWhereInput } from '../../generated/prisma/models/Client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { validatePhones } from '../utils/phone-validation.js';
@@ -158,14 +158,15 @@ export class ClientsService {
     if (dto.phones?.length) {
       validatePhones(dto.phones);
 
-      for (const phone of dto.phones) {
-        const existingPhone = await this.prisma.phoneClient.findFirst({
-          where: { dialCode: phone.dialCode, phoneNumber: phone.phoneNumber },
-        });
+      const existingPhone = await this.prisma.phoneClient.findFirst({
+        where: {
+          OR: dto.phones.map((p) => ({ dialCode: p.dialCode, phoneNumber: p.phoneNumber })),
+          client: { userId },
+        },
+      });
 
-        if (existingPhone) {
-          throw new ConflictException(`Phone ${phone.dialCode} ${phone.phoneNumber} already in use`);
-        }
+      if (existingPhone) {
+        throw new ConflictException('Phone number already registered');
       }
     }
 
@@ -220,74 +221,92 @@ export class ClientsService {
     }
 
     if (dto.phones?.length) {
+      for (const phone of dto.phones) {
+        if (!phone.id && (!phone.dialCode || !phone.phoneNumber)) {
+          throw new BadRequestException('Both dialCode and phoneNumber are required when creating a new phone');
+        }
+      }
+
       const phonesToValidate = dto.phones
         .filter((p): p is { dialCode: string; phoneNumber: string } => !!p.dialCode && !!p.phoneNumber);
       if (phonesToValidate.length) {
         validatePhones(phonesToValidate);
       }
 
+      // Resolve dialCode for phones being updated without it
       for (const phone of dto.phones) {
-        if (phone.phoneNumber) {
-          const dialCode = phone.dialCode ?? (phone.id
-            ? (await this.prisma.phoneClient.findUnique({ where: { id: phone.id } }))?.dialCode
-            : undefined);
-
-          const existingPhone = await this.prisma.phoneClient.findFirst({
-            where: {
-              dialCode: dialCode,
-              phoneNumber: phone.phoneNumber,
-              ...(phone.id && { id: { not: phone.id } }),
-            },
-          });
-
-          if (existingPhone) {
-            throw new ConflictException(`Phone ${dialCode} ${phone.phoneNumber} already in use`);
+        if (phone.id && phone.phoneNumber && !phone.dialCode) {
+          const existing = await this.prisma.phoneClient.findUnique({ where: { id: phone.id } });
+          if (existing) {
+            phone.dialCode = existing.dialCode;
+            validatePhones([{ dialCode: phone.dialCode, phoneNumber: phone.phoneNumber }]);
           }
-        }
-      }
-
-      for (const phone of dto.phones) {
-        if (phone.id) {
-          const existingPhoneRecord = await this.prisma.phoneClient.findFirst({
-            where: { id: phone.id, clientId },
-          });
-
-          if (!existingPhoneRecord) {
-            throw new NotFoundException(`Phone with id ${phone.id} not found for this client`);
-          }
-
-          await this.prisma.phoneClient.update({
-            where: { id: phone.id },
-            data: {
-              ...(phone.dialCode && { dialCode: phone.dialCode }),
-              ...(phone.phoneNumber && { phoneNumber: phone.phoneNumber }),
-            },
-          });
-        } else {
-          await this.prisma.phoneClient.create({
-            data: {
-              clientId,
-              dialCode: phone.dialCode!,
-              phoneNumber: phone.phoneNumber!,
-            },
-          });
         }
       }
     }
 
     const { phones, ...clientData } = dto;
 
-    const updated = await this.prisma.client.update({
-      where: { id: clientId },
-      data: {
-        ...(clientData.name && { name: clientData.name }),
-        ...(clientData.document && { document: clientData.document }),
-        ...(clientData.documentType !== undefined && { documentType: clientData.documentType }),
-        ...(clientData.status !== undefined && { status: clientData.status }),
-      },
-      include: {
-        phoneClients: true,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (dto.phones?.length) {
+        for (const phone of dto.phones) {
+          if (phone.phoneNumber) {
+            const existingPhone = await tx.phoneClient.findFirst({
+              where: {
+                dialCode: phone.dialCode,
+                phoneNumber: phone.phoneNumber,
+                ...(phone.id && { id: { not: phone.id } }),
+                client: { userId },
+              },
+            });
+
+            if (existingPhone) {
+              throw new ConflictException(`Phone ${phone.dialCode} ${phone.phoneNumber} already registered`);
+            }
+          }
+        }
+
+        for (const phone of dto.phones) {
+          if (phone.id) {
+            const existingPhoneRecord = await tx.phoneClient.findFirst({
+              where: { id: phone.id, clientId },
+            });
+
+            if (!existingPhoneRecord) {
+              throw new NotFoundException(`Phone with id ${phone.id} not found for this client`);
+            }
+
+            await tx.phoneClient.update({
+              where: { id: phone.id },
+              data: {
+                ...(phone.dialCode && { dialCode: phone.dialCode }),
+                ...(phone.phoneNumber && { phoneNumber: phone.phoneNumber }),
+              },
+            });
+          } else {
+            await tx.phoneClient.create({
+              data: {
+                clientId,
+                dialCode: phone.dialCode!,
+                phoneNumber: phone.phoneNumber!,
+              },
+            });
+          }
+        }
+      }
+
+      return tx.client.update({
+        where: { id: clientId },
+        data: {
+          ...(clientData.name && { name: clientData.name }),
+          ...(clientData.document && { document: clientData.document }),
+          ...(clientData.documentType !== undefined && { documentType: clientData.documentType }),
+          ...(clientData.status !== undefined && { status: clientData.status }),
+        },
+        include: {
+          phoneClients: true,
+        },
+      });
     });
 
     const { deletedAt, amount, phoneClients, ...rest } = updated;

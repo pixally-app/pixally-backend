@@ -1,5 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class PhoneResponseDto {
+  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
+  id: string;
+
+  @ApiProperty({ example: '+55' })
+  dialCode: string;
+
+  @ApiProperty({ example: '11987654321' })
+  phoneNumber: string;
+}
+
 export class ClientResponseDto {
   @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
   id: string;
@@ -19,8 +30,8 @@ export class ClientResponseDto {
   @ApiProperty({ example: true })
   status: boolean;
 
-  @ApiPropertyOptional({ example: '+55 11 98765-4321' })
-  phones: string;
+  @ApiProperty({ type: [PhoneResponseDto] })
+  phones: PhoneResponseDto[];
 
   @ApiProperty({ example: '2026-01-15T10:30:00.000Z' })
   createdAt: Date;

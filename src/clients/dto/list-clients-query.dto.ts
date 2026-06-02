@@ -15,7 +15,9 @@ export class ListClientsQueryDto {
 
   @ApiPropertyOptional({ example: true, description: 'Filter by status' })
   @IsOptional()
-  @Transform(({ value }) => value === 'true')
+  @Transform(({ value }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
   @IsBoolean()
   status?: boolean;
 

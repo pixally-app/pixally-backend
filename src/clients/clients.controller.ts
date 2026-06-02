@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Use
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/jwt.strategy.js';
 import { ClientsService } from './clients.service.js';
 import { CreateClientDto } from './dto/create-client.dto.js';
 import { UpdateClientDto } from './dto/update-client.dto.js';
@@ -20,7 +21,7 @@ export class ClientsController {
   @ApiResponse({ status: 200, description: 'Lista paginada de clientes', type: PaginatedClientsResponseDto })
   @ApiResponse({ status: 401, description: 'Não autorizado - token JWT inválido ou ausente' })
   findAll(
-    @CurrentUser() user: { userId: string; email: string; role: string },
+    @CurrentUser() user: AuthenticatedUser,
     @Query() query: ListClientsQueryDto,
   ) {
     return this.clientsService.findAll(user.userId, query);
@@ -32,7 +33,7 @@ export class ClientsController {
   @ApiResponse({ status: 401, description: 'Não autorizado - token JWT inválido ou ausente' })
   @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
   findOne(
-    @CurrentUser() user: { userId: string; email: string; role: string },
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
     return this.clientsService.findOne(user.userId, id);
@@ -46,7 +47,7 @@ export class ClientsController {
   @ApiResponse({ status: 401, description: 'Não autorizado - token JWT inválido ou ausente' })
   @ApiResponse({ status: 409, description: 'Documento ou telefone já cadastrado' })
   create(
-    @CurrentUser() user: { userId: string; email: string; role: string },
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateClientDto,
   ) {
     return this.clientsService.create(user.userId, dto);
@@ -60,7 +61,7 @@ export class ClientsController {
   @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
   @ApiResponse({ status: 409, description: 'Documento ou telefone já cadastrado' })
   update(
-    @CurrentUser() user: { userId: string; email: string; role: string },
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
     @Body() dto: UpdateClientDto,
   ) {
@@ -74,7 +75,7 @@ export class ClientsController {
   @ApiResponse({ status: 401, description: 'Não autorizado - token JWT inválido ou ausente' })
   @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
   remove(
-    @CurrentUser() user: { userId: string; email: string; role: string },
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
     return this.clientsService.remove(user.userId, id);
