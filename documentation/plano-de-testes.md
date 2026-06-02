@@ -134,7 +134,7 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-CLI-003-01 | Cliente existente | Token válido + ID válido | Dados do cliente | 200 |
 | CT-CLI-003-02 | Cliente inexistente | Token válido + ID inválido | Mensagem: não encontrado | 404 |
 | CT-CLI-003-03 | Sem autenticação | Sem token | Acesso negado | 401 |
-| CT-CLI-003-04 | Cliente de outro usuário | Token válido + ID de outro usuário | Acesso negado | 403 |
+| CT-CLI-003-04 | Cliente de outro usuário | Token válido + ID de outro usuário | Acesso negado | 404 |
 
 #### CT-CLI-004 — PATCH /clients/:id
 
