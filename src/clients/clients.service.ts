@@ -299,4 +299,19 @@ export class ClientsService {
       phones: phoneClients,
     };
   }
+
+  async remove(userId: string, clientId: string) {
+    const client = await this.prisma.client.findFirst({
+      where: { id: clientId, userId, deletedAt: null },
+    });
+
+    if (!client) {
+      throw new NotFoundException('Client not found');
+    }
+
+    await this.prisma.client.update({
+      where: { id: clientId },
+      data: { deletedAt: new Date() },
+    });
+  }
 }

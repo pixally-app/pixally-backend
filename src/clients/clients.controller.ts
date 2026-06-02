@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
@@ -65,5 +65,18 @@ export class ClientsController {
     @Body() dto: UpdateClientDto,
   ) {
     return this.clientsService.update(user.userId, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Remover cliente (soft delete)' })
+  @ApiResponse({ status: 204, description: 'Cliente removido com sucesso' })
+  @ApiResponse({ status: 401, description: 'Não autorizado - token JWT inválido ou ausente' })
+  @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
+  remove(
+    @CurrentUser() user: { userId: string; email: string; role: string },
+    @Param('id') id: string,
+  ) {
+    return this.clientsService.remove(user.userId, id);
   }
 }
