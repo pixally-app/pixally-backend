@@ -172,4 +172,42 @@ describe('POST /clients (CT-CLI-001)', () => {
     expect(response.body).toHaveProperty('message');
     expect(response.body.message).toContain('Invalid Brazilian phone number');
   });
+
+  it('CT-CLI-001-06 - should return 409 when document is already registered for the same user', async () => {
+    prismaService.client.findFirst.mockResolvedValue({
+      id: faker.string.uuid(),
+      document: validPayload.document,
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send(validPayload)
+      .expect(409);
+
+    expect(response.body).toMatchObject({
+      statusCode: 409,
+    });
+    expect(response.body.message).toContain(validPayload.document);
+  });
+
+  it('CT-CLI-001-07 - should return 409 when phone number is already registered', async () => {
+    prismaService.client.findFirst.mockResolvedValue(null);
+    prismaService.phoneClient.findFirst.mockResolvedValue({
+      id: faker.string.uuid(),
+      dialCode: '+55',
+      phoneNumber: '11987654321',
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/clients')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send(validPayload)
+      .expect(409);
+
+    expect(response.body).toMatchObject({
+      statusCode: 409,
+      message: 'Phone number already registered',
+    });
+  });
 });

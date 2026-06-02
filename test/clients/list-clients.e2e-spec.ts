@@ -136,4 +136,58 @@ describe('GET /clients (CT-CLI-002)', () => {
     expect(response.body).toHaveProperty('total', 0);
     expect(response.body).toHaveProperty('totalPages', 0);
   });
+
+  it('CT-CLI-002-04 - should return 200 and filter by name', async () => {
+    prismaService.client.findMany.mockResolvedValue([]);
+    prismaService.client.count.mockResolvedValue(0);
+
+    await request(app.getHttpServer())
+      .get('/clients?name=João')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(prismaService.client.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          name: { contains: 'João', mode: 'insensitive' },
+        }),
+      }),
+    );
+  });
+
+  it('CT-CLI-002-05 - should return 200 and filter by document', async () => {
+    prismaService.client.findMany.mockResolvedValue([]);
+    prismaService.client.count.mockResolvedValue(0);
+
+    await request(app.getHttpServer())
+      .get('/clients?document=12345678900')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(prismaService.client.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          document: '12345678900',
+        }),
+      }),
+    );
+  });
+
+  it('CT-CLI-002-06 - should return 200 and filter by status', async () => {
+    prismaService.client.findMany.mockResolvedValue([]);
+    prismaService.client.count.mockResolvedValue(0);
+
+    await request(app.getHttpServer())
+      .get('/clients?status=true')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+
+    expect(prismaService.client.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: true,
+        }),
+      }),
+    );
+  });
 });
