@@ -52,6 +52,21 @@ export class UpdateClientDto {
   @IsBoolean()
   status?: boolean;
 
+  @ApiPropertyOptional({ example: 'Rua das Flores', description: 'Rua ou Avenida' })
+  @IsOptional()
+  @IsString()
+  street?: string;
+
+  @ApiPropertyOptional({ example: 'Centro', description: 'Bairro' })
+  @IsOptional()
+  @IsString()
+  neighborhood?: string;
+
+  @ApiPropertyOptional({ example: '123', description: 'Número do endereço' })
+  @IsOptional()
+  @IsString()
+  number?: string;
+
   @ApiPropertyOptional({
     type: [UpdatePhoneDto],
     description: 'Telefones para atualizar (com id) ou criar (sem id)',
