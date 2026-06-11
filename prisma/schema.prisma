@@ -64,6 +64,9 @@ model Client {
   status       Boolean?
   amount       Decimal?  @db.Decimal
   phones       Json?
+  street       String?
+  neighborhood String?
+  number       String?
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")

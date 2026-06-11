@@ -30,6 +30,15 @@ export class ClientResponseDto {
   @ApiProperty({ example: true })
   status: boolean;
 
+  @ApiPropertyOptional({ example: 'Rua das Flores' })
+  street: string | null;
+
+  @ApiPropertyOptional({ example: 'Centro' })
+  neighborhood: string | null;
+
+  @ApiPropertyOptional({ example: '123' })
+  number: string | null;
+
   @ApiProperty({ type: [PhoneResponseDto] })
   phones: PhoneResponseDto[];
 

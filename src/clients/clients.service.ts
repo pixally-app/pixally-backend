@@ -177,6 +177,9 @@ export class ClientsService {
         document: dto.document,
         documentType: dto.documentType,
         status: dto.status ?? true,
+        street: dto.street,
+        neighborhood: dto.neighborhood,
+        number: dto.number,
         phoneClients: dto.phones?.length
           ? {
               create: dto.phones.map((p) => ({
@@ -302,6 +305,9 @@ export class ClientsService {
           ...(clientData.document && { document: clientData.document }),
           ...(clientData.documentType !== undefined && { documentType: clientData.documentType }),
           ...(clientData.status !== undefined && { status: clientData.status }),
+          ...(clientData.street !== undefined && { street: clientData.street }),
+          ...(clientData.neighborhood !== undefined && { neighborhood: clientData.neighborhood }),
+          ...(clientData.number !== undefined && { number: clientData.number }),
         },
         include: {
           phoneClients: true,
