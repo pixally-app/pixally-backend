@@ -22,10 +22,15 @@ export class CreateAccountReceivableDto {
   @IsUUID()
   pixReceiptId?: string;
 
-  @ApiPropertyOptional({ example: 'Consultoria mensal', description: 'Descrição do serviço' })
+  @ApiPropertyOptional({ example: 'Manutenção de ar condicionado', description: 'Nome do serviço' })
   @IsOptional()
   @IsString()
-  descriptionService?: string;
+  serviceName?: string;
+
+  @ApiPropertyOptional({ example: 'Limpeza e recarga de gás', description: 'Descrição do serviço' })
+  @IsOptional()
+  @IsString()
+  serviceDescription?: string;
 
   @ApiProperty({ example: 1500.0, description: 'Valor total da cobrança' })
   @IsNumber()
@@ -52,11 +57,12 @@ export class CreateAccountReceivableDto {
   @Type(() => Number)
   installmentNumber?: number;
 
-  @ApiProperty({ example: 500.0, description: 'Valor da parcela' })
+  @ApiPropertyOptional({ example: 500.0, description: 'Valor da parcela (se omitido, usa o totalAmount)' })
+  @IsOptional()
   @IsNumber()
   @Min(0)
   @Type(() => Number)
-  installmentAmount: number;
+  installmentAmount?: number;
 
   @ApiProperty({ example: '2026-07-01', description: 'Data de vencimento (YYYY-MM-DD)' })
   @IsDateString()

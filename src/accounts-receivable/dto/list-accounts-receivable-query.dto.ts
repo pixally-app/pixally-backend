@@ -3,7 +3,6 @@ import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
 export enum AccountReceivableStatusFilter {
-  TODOS = 'todos',
   PENDENTE = 'pendente',
   PAGO = 'pago',
   VENCIDO = 'vencido',
@@ -11,9 +10,9 @@ export enum AccountReceivableStatusFilter {
 
 export class ListAccountsReceivableQueryDto {
   @ApiPropertyOptional({
-    enum: AccountReceivableStatusFilter,
+    enum: Object.values(AccountReceivableStatusFilter),
     example: AccountReceivableStatusFilter.PENDENTE,
-    description: 'Filtro por status: todos, pendente, pago, vencido',
+    description: 'Filtro por status: pendente, pago, vencido',
   })
   @IsOptional()
   @IsEnum(AccountReceivableStatusFilter)

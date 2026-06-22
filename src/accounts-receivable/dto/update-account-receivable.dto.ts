@@ -16,10 +16,15 @@ export class UpdateAccountReceivableDto {
   @IsUUID()
   pixReceiptId?: string;
 
-  @ApiPropertyOptional({ example: 'Consultoria mensal' })
+  @ApiPropertyOptional({ example: 'Manutenção de ar condicionado' })
   @IsOptional()
   @IsString()
-  descriptionService?: string;
+  serviceName?: string;
+
+  @ApiPropertyOptional({ example: 'Limpeza e recarga de gás' })
+  @IsOptional()
+  @IsString()
+  serviceDescription?: string;
 
   @ApiPropertyOptional({ example: 1500.0 })
   @IsOptional()

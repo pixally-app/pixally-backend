@@ -20,7 +20,7 @@ export class AccountsReceivableService {
       where.clientId = clientId;
     }
 
-    if (status && status !== AccountReceivableStatusFilter.TODOS) {
+    if (status) {
       if (status === AccountReceivableStatusFilter.PAGO) {
         where.paidAt = { not: null };
       } else if (status === AccountReceivableStatusFilter.PENDENTE) {
@@ -77,12 +77,14 @@ export class AccountsReceivableService {
         userId,
         clientId: dto.clientId,
         pixReceiptId: dto.pixReceiptId,
-        descriptionService: dto.descriptionService,
+        clientName: client.name,
+        serviceName: dto.serviceName,
+        serviceDescription: dto.serviceDescription,
         totalAmount: dto.totalAmount,
         installmentGroupId: dto.installmentGroupId,
         installmentCount: dto.installmentCount,
         installmentNumber: dto.installmentNumber,
-        installmentAmount: dto.installmentAmount,
+        installmentAmount: dto.installmentAmount ?? dto.totalAmount,
         dueDate: new Date(dto.dueDate),
         payStub: dto.payStub,
       },
@@ -104,7 +106,8 @@ export class AccountsReceivableService {
       where: { id },
       data: {
         ...(dto.pixReceiptId !== undefined && { pixReceiptId: dto.pixReceiptId }),
-        ...(dto.descriptionService !== undefined && { descriptionService: dto.descriptionService }),
+        ...(dto.serviceName !== undefined && { serviceName: dto.serviceName }),
+        ...(dto.serviceDescription !== undefined && { serviceDescription: dto.serviceDescription }),
         ...(dto.totalAmount !== undefined && { totalAmount: dto.totalAmount }),
         ...(dto.installmentCount !== undefined && { installmentCount: dto.installmentCount }),
         ...(dto.installmentNumber !== undefined && { installmentNumber: dto.installmentNumber }),
@@ -135,7 +138,9 @@ export class AccountsReceivableService {
     userId: string;
     clientId: string;
     pixReceiptId: string | null;
-    descriptionService: string | null;
+    clientName: string | null;
+    serviceName: string | null;
+    serviceDescription: string | null;
     totalAmount: unknown;
     installmentGroupId: string | null;
     installmentCount: number | null;

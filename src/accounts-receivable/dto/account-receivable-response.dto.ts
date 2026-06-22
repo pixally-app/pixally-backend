@@ -13,8 +13,14 @@ export class AccountReceivableResponseDto {
   @ApiPropertyOptional({ example: 'uuid' })
   pixReceiptId: string | null;
 
-  @ApiPropertyOptional({ example: 'Consultoria mensal' })
-  descriptionService: string | null;
+  @ApiPropertyOptional({ example: 'Manutenção de ar condicionado' })
+  clientName: string | null;
+
+  @ApiPropertyOptional({ example: 'Manutenção de ar condicionado' })
+  serviceName: string | null;
+
+  @ApiPropertyOptional({ example: 'Limpeza e recarga de gás' })
+  serviceDescription: string | null;
 
   @ApiProperty({ example: 1500.0 })
   totalAmount: number;

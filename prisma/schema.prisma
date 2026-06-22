@@ -181,7 +181,9 @@ model AccountReceivable {
   userId               String    @map("user_id") @db.Uuid
   pixReceiptId         String?   @map("pix_receipt_id") @db.Uuid
   clientId             String    @map("client_id") @db.Uuid
-  descriptionService   String?   @map("description_service")
+  clientName           String?   @map("client_name")
+  serviceName          String?   @map("service_name")
+  serviceDescription   String?   @map("service_description")
   totalAmount          Decimal   @map("total_amount") @db.Decimal
   installmentGroupId   String?   @map("installment_group_id") @db.Uuid
   installmentCount     Int?      @map("installment_count")

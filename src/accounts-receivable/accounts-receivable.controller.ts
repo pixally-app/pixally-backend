@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
@@ -10,7 +10,7 @@ import { ListAccountsReceivableQueryDto } from './dto/list-accounts-receivable-q
 import { UpdateAccountReceivableDto } from './dto/update-account-receivable.dto.js';
 
 @ApiTags('Accounts Receivable')
-@Controller('contas')
+@Controller('accounts-receivable')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class AccountsReceivableController {
@@ -53,7 +53,7 @@ export class AccountsReceivableController {
     return this.accountsReceivableService.create(user.userId, dto);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @ApiOperation({ summary: 'Atualizar conta a receber' })
   @ApiResponse({ status: 200, description: 'Conta a receber atualizada com sucesso', type: AccountReceivableResponseDto })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
