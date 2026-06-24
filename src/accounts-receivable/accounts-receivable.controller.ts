@@ -53,6 +53,18 @@ export class AccountsReceivableController {
     return this.accountsReceivableService.create(user.userId, dto);
   }
 
+  @Patch('group/:groupId/mark-paid')
+  @ApiOperation({ summary: 'Marcar todas as parcelas de um grupo como pagas' })
+  @ApiResponse({ status: 200, description: 'Parcelas marcadas como pagas', type: [AccountReceivableResponseDto] })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Grupo de parcelamento não encontrado' })
+  markGroupAsPaid(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('groupId') groupId: string,
+  ) {
+    return this.accountsReceivableService.markGroupAsPaid(user.userId, groupId);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Atualizar conta a receber' })
   @ApiResponse({ status: 200, description: 'Conta a receber atualizada com sucesso', type: AccountReceivableResponseDto })

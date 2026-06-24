@@ -227,7 +227,7 @@ async function main() {
           userId,
           clientId: client.id,
           pixReceiptId: isPaid && relatedReceipt ? relatedReceipt.receipt.id : null,
-          descriptionService: faker.commerce.productName(),
+          serviceDescription: faker.commerce.productName(),
           totalAmount,
           installmentGroupId: groupId,
           installmentCount,

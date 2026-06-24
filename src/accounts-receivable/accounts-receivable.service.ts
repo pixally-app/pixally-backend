@@ -10,7 +10,7 @@ export class AccountsReceivableService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(userId: string, query: ListAccountsReceivableQueryDto) {
-    const { page = 1, limit = 10, status, clientId } = query;
+    const { page = 1, limit = 10, status, clientId, installmentGroupId } = query;
     const skip = (page - 1) * limit;
     const now = new Date();
 
@@ -18,6 +18,10 @@ export class AccountsReceivableService {
 
     if (clientId) {
       where.clientId = clientId;
+    }
+
+    if (installmentGroupId) {
+      where.installmentGroupId = installmentGroupId;
     }
 
     if (status) {
@@ -119,6 +123,30 @@ export class AccountsReceivableService {
     });
 
     return this.toResponse(updated);
+  }
+
+  async markGroupAsPaid(userId: string, groupId: string) {
+    const records = await this.prisma.accountReceivable.findMany({
+      where: { installmentGroupId: groupId, userId },
+    });
+
+    if (!records.length) {
+      throw new NotFoundException('Installment group not found');
+    }
+
+    const now = new Date();
+
+    await this.prisma.accountReceivable.updateMany({
+      where: { installmentGroupId: groupId, userId, paidAt: null },
+      data: { paidAt: now },
+    });
+
+    const updated = await this.prisma.accountReceivable.findMany({
+      where: { installmentGroupId: groupId, userId },
+      orderBy: { installmentNumber: 'asc' },
+    });
+
+    return updated.map((r) => this.toResponse(r));
   }
 
   async remove(userId: string, id: string) {

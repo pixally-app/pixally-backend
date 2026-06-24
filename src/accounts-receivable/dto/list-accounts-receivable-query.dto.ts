@@ -23,6 +23,11 @@ export class ListAccountsReceivableQueryDto {
   @IsUUID()
   clientId?: string;
 
+  @ApiPropertyOptional({ example: 'uuid-do-grupo', description: 'Filtrar por grupo de parcelamento' })
+  @IsOptional()
+  @IsUUID()
+  installmentGroupId?: string;
+
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
