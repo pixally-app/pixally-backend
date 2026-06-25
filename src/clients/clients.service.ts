@@ -43,7 +43,7 @@ export class ClientsService {
           },
           accountsReceivable: {
             select: {
-              installmentAmount: true,
+              totalAmount: true,
               paidAt: true,
             },
           },
@@ -66,7 +66,7 @@ export class ClientsService {
       let totalReceivable = 0;
 
       for (const ar of accountsReceivable) {
-        const value = Number(ar.installmentAmount);
+        const value = Number(ar.totalAmount);
         if (ar.paidAt) {
           totalReceived += value;
         } else {
@@ -103,7 +103,7 @@ export class ClientsService {
         },
         accountsReceivable: {
           select: {
-            installmentAmount: true,
+            totalAmount: true,
             paidAt: true,
           },
         },
@@ -127,7 +127,7 @@ export class ClientsService {
     let totalReceivable = 0;
 
     for (const ar of accountsReceivable) {
-      const value = Number(ar.installmentAmount);
+      const value = Number(ar.totalAmount);
       if (ar.paidAt) {
         totalReceived += value;
       } else {

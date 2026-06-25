@@ -1,8 +1,9 @@
--- CreateTable
 CREATE TABLE "users" (
     "id" UUID NOT NULL,
-    "username" TEXT,
+    "username" TEXT NOT NULL,
     "email" TEXT NOT NULL,
+    "document" TEXT NOT NULL,
+    "phone" TEXT NOT NULL,
     "password" TEXT NOT NULL,
     "role" TEXT NOT NULL,
     "is_active" BOOLEAN,
@@ -12,7 +13,10 @@ CREATE TABLE "users" (
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
+CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+CREATE UNIQUE INDEX "users_document_key" ON "users"("document");
+
 CREATE TABLE "zapify_integration" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
@@ -24,7 +28,6 @@ CREATE TABLE "zapify_integration" (
     CONSTRAINT "zapify_integration_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "clients" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
@@ -34,6 +37,9 @@ CREATE TABLE "clients" (
     "status" BOOLEAN,
     "amount" DECIMAL,
     "phones" JSONB,
+    "street" TEXT,
+    "neighborhood" TEXT,
+    "number" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -41,7 +47,6 @@ CREATE TABLE "clients" (
     CONSTRAINT "clients_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "phone_client" (
     "id" UUID NOT NULL,
     "client_id" UUID NOT NULL,
@@ -51,7 +56,6 @@ CREATE TABLE "phone_client" (
     CONSTRAINT "phone_client_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "monitored_contacts" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
@@ -64,7 +68,6 @@ CREATE TABLE "monitored_contacts" (
     CONSTRAINT "monitored_contacts_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "pix_receipts" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
@@ -98,7 +101,6 @@ CREATE TABLE "pix_receipts" (
     CONSTRAINT "pix_receipts_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "pix_receipts_blob" (
     "id" UUID NOT NULL,
     "pix_receipts_id" UUID,
@@ -109,7 +111,6 @@ CREATE TABLE "pix_receipts_blob" (
     CONSTRAINT "pix_receipts_blob_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "warnings" (
     "id" UUID NOT NULL,
     "pix_receipt_id" UUID NOT NULL,
@@ -125,20 +126,17 @@ CREATE TABLE "warnings" (
     CONSTRAINT "warnings_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "accounts_receivable" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
     "pix_receipt_id" UUID,
     "client_id" UUID NOT NULL,
-    "description_service" TEXT,
+    "client_name" TEXT NOT NULL,
+    "service_name" TEXT NOT NULL,
+    "service_description" TEXT,
     "total_amount" DECIMAL NOT NULL,
-    "installment_group_id" UUID,
-    "installment_count" INTEGER,
-    "installment_number" INTEGER,
-    "installment_amount" DECIMAL NOT NULL,
     "due_date" DATE NOT NULL,
-    "status" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
     "paid_at" TIMESTAMP(3),
     "pay_stub" TEXT,
     "matched_automatically" BOOLEAN,
@@ -148,41 +146,43 @@ CREATE TABLE "accounts_receivable" (
     CONSTRAINT "accounts_receivable_pkey" PRIMARY KEY ("id")
 );
 
--- AddForeignKey
+CREATE TABLE "installments" (
+    "id" UUID NOT NULL,
+    "account_receivable_id" UUID NOT NULL,
+    "installment_number" INTEGER NOT NULL,
+    "amount" DECIMAL NOT NULL,
+    "due_date" DATE NOT NULL,
+    "paid_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "installments_pkey" PRIMARY KEY ("id")
+);
+
 ALTER TABLE "zapify_integration" ADD CONSTRAINT "zapify_integration_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "clients" ADD CONSTRAINT "clients_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "phone_client" ADD CONSTRAINT "phone_client_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "monitored_contacts" ADD CONSTRAINT "monitored_contacts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "monitored_contacts" ADD CONSTRAINT "monitored_contacts_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "pix_receipts" ADD CONSTRAINT "pix_receipts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "pix_receipts" ADD CONSTRAINT "pix_receipts_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "pix_receipts_blob" ADD CONSTRAINT "pix_receipts_blob_pix_receipts_id_fkey" FOREIGN KEY ("pix_receipts_id") REFERENCES "pix_receipts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "warnings" ADD CONSTRAINT "warnings_pix_receipt_id_fkey" FOREIGN KEY ("pix_receipt_id") REFERENCES "pix_receipts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "warnings" ADD CONSTRAINT "warnings_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_pix_receipt_id_fkey" FOREIGN KEY ("pix_receipt_id") REFERENCES "pix_receipts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
 ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "installments" ADD CONSTRAINT "installments_account_receivable_id_fkey" FOREIGN KEY ("account_receivable_id") REFERENCES "accounts_receivable"("id") ON DELETE CASCADE ON UPDATE CASCADE;

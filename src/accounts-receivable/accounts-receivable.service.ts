@@ -10,7 +10,7 @@ export class AccountsReceivableService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(userId: string, query: ListAccountsReceivableQueryDto) {
-    const { page = 1, limit = 10, status, clientId, installmentGroupId } = query;
+    const { page = 1, limit = 10, status, clientId } = query;
     const skip = (page - 1) * limit;
     const now = new Date();
 
@@ -20,19 +20,17 @@ export class AccountsReceivableService {
       where.clientId = clientId;
     }
 
-    if (installmentGroupId) {
-      where.installmentGroupId = installmentGroupId;
-    }
-
     if (status) {
-      if (status === AccountReceivableStatusFilter.PAGO) {
-        where.paidAt = { not: null };
-      } else if (status === AccountReceivableStatusFilter.PENDENTE) {
-        where.paidAt = null;
+      if (status === AccountReceivableStatusFilter.PAID) {
+        where.status = 'PAID';
+      } else if (status === AccountReceivableStatusFilter.PENDING) {
+        where.status = 'PENDING';
         where.dueDate = { gte: now };
-      } else if (status === AccountReceivableStatusFilter.VENCIDO) {
-        where.paidAt = null;
+      } else if (status === AccountReceivableStatusFilter.OVERDUE) {
+        where.status = 'PENDING';
         where.dueDate = { lt: now };
+      } else if (status === AccountReceivableStatusFilter.CANCELLED) {
+        where.status = 'CANCELLED';
       }
     }
 
@@ -58,13 +56,16 @@ export class AccountsReceivableService {
   async findOne(userId: string, id: string) {
     const record = await this.prisma.accountReceivable.findFirst({
       where: { id, userId },
+      include: {
+        installments: { orderBy: { installmentNumber: 'asc' } },
+      },
     });
 
     if (!record) {
       throw new NotFoundException('Account receivable not found');
     }
 
-    return this.toResponse(record);
+    return this.toResponse(record, record.installments);
   }
 
   async create(userId: string, dto: CreateAccountReceivableDto) {
@@ -76,21 +77,56 @@ export class AccountsReceivableService {
       throw new NotFoundException('Client not found');
     }
 
+    const installmentCount = dto.installmentCount ?? 1;
+
+    if (installmentCount > 1) {
+      const installmentAmount = dto.totalAmount / installmentCount;
+      const baseDate = new Date(dto.dueDate);
+
+      const record = await this.prisma.accountReceivable.create({
+        data: {
+          userId,
+          clientId: dto.clientId,
+          pixReceiptId: dto.pixReceiptId ?? null,
+          clientName: client.name,
+          serviceName: dto.serviceName ?? null,
+          serviceDescription: dto.serviceDescription ?? null,
+          totalAmount: dto.totalAmount,
+          status: 'PENDING',
+          dueDate: baseDate,
+          payStub: dto.payStub ?? null,
+          installments: {
+            create: Array.from({ length: installmentCount }, (_, i) => {
+              const dueDate = new Date(baseDate);
+              dueDate.setMonth(dueDate.getMonth() + i);
+              return {
+                installmentNumber: i + 1,
+                amount: installmentAmount,
+                dueDate,
+              };
+            }),
+          },
+        },
+        include: {
+          installments: { orderBy: { installmentNumber: 'asc' } },
+        },
+      });
+
+      return this.toResponse(record, record.installments);
+    }
+
     const record = await this.prisma.accountReceivable.create({
       data: {
         userId,
         clientId: dto.clientId,
-        pixReceiptId: dto.pixReceiptId,
+        pixReceiptId: dto.pixReceiptId ?? null,
         clientName: client.name,
         serviceName: dto.serviceName,
-        serviceDescription: dto.serviceDescription,
+        serviceDescription: dto.serviceDescription ?? null,
         totalAmount: dto.totalAmount,
-        installmentGroupId: dto.installmentGroupId,
-        installmentCount: dto.installmentCount,
-        installmentNumber: dto.installmentNumber,
-        installmentAmount: dto.installmentAmount ?? dto.totalAmount,
+        status: 'PENDING',
         dueDate: new Date(dto.dueDate),
-        payStub: dto.payStub,
+        payStub: dto.payStub ?? null,
       },
     });
 
@@ -113,9 +149,6 @@ export class AccountsReceivableService {
         ...(dto.serviceName !== undefined && { serviceName: dto.serviceName }),
         ...(dto.serviceDescription !== undefined && { serviceDescription: dto.serviceDescription }),
         ...(dto.totalAmount !== undefined && { totalAmount: dto.totalAmount }),
-        ...(dto.installmentCount !== undefined && { installmentCount: dto.installmentCount }),
-        ...(dto.installmentNumber !== undefined && { installmentNumber: dto.installmentNumber }),
-        ...(dto.installmentAmount !== undefined && { installmentAmount: dto.installmentAmount }),
         ...(dto.dueDate !== undefined && { dueDate: new Date(dto.dueDate) }),
         ...(dto.paidAt !== undefined && { paidAt: dto.paidAt ? new Date(dto.paidAt) : null }),
         ...(dto.payStub !== undefined && { payStub: dto.payStub }),
@@ -125,28 +158,73 @@ export class AccountsReceivableService {
     return this.toResponse(updated);
   }
 
-  async markGroupAsPaid(userId: string, groupId: string) {
-    const records = await this.prisma.accountReceivable.findMany({
-      where: { installmentGroupId: groupId, userId },
+  async markInstallmentAsPaid(userId: string, accountReceivableId: string, installmentId: string) {
+    const record = await this.prisma.accountReceivable.findFirst({
+      where: { id: accountReceivableId, userId },
+      include: { installments: true },
     });
 
-    if (!records.length) {
-      throw new NotFoundException('Installment group not found');
+    if (!record) {
+      throw new NotFoundException('Account receivable not found');
+    }
+
+    const installment = record.installments.find((i) => i.id === installmentId);
+    if (!installment) {
+      throw new NotFoundException('Installment not found');
     }
 
     const now = new Date();
 
-    await this.prisma.accountReceivable.updateMany({
-      where: { installmentGroupId: groupId, userId, paidAt: null },
+    await this.prisma.installment.update({
+      where: { id: installmentId },
       data: { paidAt: now },
     });
 
-    const updated = await this.prisma.accountReceivable.findMany({
-      where: { installmentGroupId: groupId, userId },
-      orderBy: { installmentNumber: 'asc' },
+    const allPaid = record.installments.every((i) => i.id === installmentId || i.paidAt !== null);
+    if (allPaid) {
+      await this.prisma.accountReceivable.update({
+        where: { id: accountReceivableId },
+        data: { paidAt: now, status: 'PAID' },
+      });
+    }
+
+    const updated = await this.prisma.accountReceivable.findFirst({
+      where: { id: accountReceivableId },
+      include: { installments: { orderBy: { installmentNumber: 'asc' } } },
     });
 
-    return updated.map((r) => this.toResponse(r));
+    return this.toResponse(updated!, updated!.installments);
+  }
+
+  async markAllInstallmentsAsPaid(userId: string, accountReceivableId: string) {
+    const record = await this.prisma.accountReceivable.findFirst({
+      where: { id: accountReceivableId, userId },
+      include: { installments: true },
+    });
+
+    if (!record) {
+      throw new NotFoundException('Account receivable not found');
+    }
+
+    const now = new Date();
+
+    await this.prisma.$transaction([
+      this.prisma.installment.updateMany({
+        where: { accountReceivableId, paidAt: null },
+        data: { paidAt: now },
+      }),
+      this.prisma.accountReceivable.update({
+        where: { id: accountReceivableId },
+        data: { paidAt: now, status: 'PAID' },
+      }),
+    ]);
+
+    const updated = await this.prisma.accountReceivable.findFirst({
+      where: { id: accountReceivableId },
+      include: { installments: { orderBy: { installmentNumber: 'asc' } } },
+    });
+
+    return this.toResponse(updated!, updated!.installments);
   }
 
   async remove(userId: string, id: string) {
@@ -161,43 +239,71 @@ export class AccountsReceivableService {
     await this.prisma.accountReceivable.delete({ where: { id } });
   }
 
-  private toResponse(record: {
+  private toInstallmentResponse(inst: {
     id: string;
-    userId: string;
-    clientId: string;
-    pixReceiptId: string | null;
-    clientName: string | null;
-    serviceName: string | null;
-    serviceDescription: string | null;
-    totalAmount: unknown;
-    installmentGroupId: string | null;
-    installmentCount: number | null;
-    installmentNumber: number | null;
-    installmentAmount: unknown;
+    installmentNumber: number;
+    amount: unknown;
     dueDate: Date;
-    status: string | null;
     paidAt: Date | null;
-    payStub: string | null;
-    matchedAutomatically: boolean | null;
     createdAt: Date;
     updatedAt: Date;
   }) {
     const now = new Date();
-    let computedStatus: string;
-
-    if (record.paidAt) {
-      computedStatus = 'pago';
-    } else if (record.dueDate < now) {
-      computedStatus = 'vencido';
+    let status: string;
+    if (inst.paidAt) {
+      status = 'PAID';
+    } else if (inst.dueDate < now) {
+      status = 'OVERDUE';
     } else {
-      computedStatus = 'pendente';
+      status = 'PENDING';
+    }
+    return { ...inst, amount: Number(inst.amount), status };
+  }
+
+  private toResponse(
+    record: {
+      id: string;
+      userId: string;
+      clientId: string;
+      pixReceiptId: string | null;
+      clientName: string;
+      serviceName: string;
+      serviceDescription: string | null;
+      totalAmount: unknown;
+      dueDate: Date;
+      status: string;
+      paidAt: Date | null;
+      payStub: string | null;
+      matchedAutomatically: boolean | null;
+      createdAt: Date;
+      updatedAt: Date;
+    },
+    installments?: {
+      id: string;
+      installmentNumber: number;
+      amount: unknown;
+      dueDate: Date;
+      paidAt: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }[],
+  ) {
+    const now = new Date();
+    let computedStatus = record.status;
+    if (record.status === 'PENDING' && record.dueDate < now) {
+      computedStatus = 'OVERDUE';
     }
 
-    return {
+    const base = {
       ...record,
       totalAmount: Number(record.totalAmount),
-      installmentAmount: Number(record.installmentAmount),
       status: computedStatus,
     };
+
+    if (installments !== undefined) {
+      return { ...base, installments: installments.map((i) => this.toInstallmentResponse(i)) };
+    }
+
+    return base;
   }
 }

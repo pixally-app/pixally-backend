@@ -2,7 +2,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsDateString,
-  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -32,27 +31,6 @@ export class UpdateAccountReceivableDto {
   @Min(0)
   @Type(() => Number)
   totalAmount?: number;
-
-  @ApiPropertyOptional({ example: 3 })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Type(() => Number)
-  installmentCount?: number;
-
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Type(() => Number)
-  installmentNumber?: number;
-
-  @ApiPropertyOptional({ example: 500.0 })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  installmentAmount?: number;
 
   @ApiPropertyOptional({ example: '2026-07-01' })
   @IsOptional()

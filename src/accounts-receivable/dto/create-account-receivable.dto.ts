@@ -22,10 +22,10 @@ export class CreateAccountReceivableDto {
   @IsUUID()
   pixReceiptId?: string;
 
-  @ApiPropertyOptional({ example: 'Manutenção de ar condicionado', description: 'Nome do serviço' })
-  @IsOptional()
+  @ApiProperty({ example: 'Manutenção de ar condicionado', description: 'Nome do serviço' })
   @IsString()
-  serviceName?: string;
+  @IsNotEmpty()
+  serviceName: string;
 
   @ApiPropertyOptional({ example: 'Limpeza e recarga de gás', description: 'Descrição do serviço' })
   @IsOptional()
@@ -38,33 +38,14 @@ export class CreateAccountReceivableDto {
   @Type(() => Number)
   totalAmount: number;
 
-  @ApiPropertyOptional({ example: 'uuid-grupo', description: 'ID do grupo de parcelamento' })
-  @IsOptional()
-  @IsUUID()
-  installmentGroupId?: string;
-
-  @ApiPropertyOptional({ example: 3, description: 'Quantidade de parcelas' })
+  @ApiPropertyOptional({ example: 3, description: 'Quantidade de parcelas (omitir para pagamento único)' })
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(2)
   @Type(() => Number)
   installmentCount?: number;
 
-  @ApiPropertyOptional({ example: 1, description: 'Número da parcela atual' })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Type(() => Number)
-  installmentNumber?: number;
-
-  @ApiPropertyOptional({ example: 500.0, description: 'Valor da parcela (se omitido, usa o totalAmount)' })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  @Type(() => Number)
-  installmentAmount?: number;
-
-  @ApiProperty({ example: '2026-07-01', description: 'Data de vencimento (YYYY-MM-DD)' })
+  @ApiProperty({ example: '2026-07-01', description: 'Data de vencimento da primeira parcela (ou única)' })
   @IsDateString()
   dueDate: string;
 

@@ -28,8 +28,8 @@ export class AccountsReceivableController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Buscar conta a receber por ID' })
-  @ApiResponse({ status: 200, description: 'Dados da conta a receber', type: AccountReceivableResponseDto })
+  @ApiOperation({ summary: 'Buscar conta a receber por ID (inclui parcelas)' })
+  @ApiResponse({ status: 200, description: 'Dados da conta a receber com parcelas', type: AccountReceivableResponseDto })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
   findOne(
@@ -41,7 +41,7 @@ export class AccountsReceivableController {
 
   @Post()
   @HttpCode(201)
-  @ApiOperation({ summary: 'Criar conta a receber' })
+  @ApiOperation({ summary: 'Criar conta a receber (com parcelas se installmentCount > 1)' })
   @ApiResponse({ status: 201, description: 'Conta a receber criada com sucesso', type: AccountReceivableResponseDto })
   @ApiResponse({ status: 400, description: 'Dados inválidos' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
@@ -51,18 +51,6 @@ export class AccountsReceivableController {
     @Body() dto: CreateAccountReceivableDto,
   ) {
     return this.accountsReceivableService.create(user.userId, dto);
-  }
-
-  @Patch('group/:groupId/mark-paid')
-  @ApiOperation({ summary: 'Marcar todas as parcelas de um grupo como pagas' })
-  @ApiResponse({ status: 200, description: 'Parcelas marcadas como pagas', type: [AccountReceivableResponseDto] })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  @ApiResponse({ status: 404, description: 'Grupo de parcelamento não encontrado' })
-  markGroupAsPaid(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('groupId') groupId: string,
-  ) {
-    return this.accountsReceivableService.markGroupAsPaid(user.userId, groupId);
   }
 
   @Patch(':id')
@@ -79,9 +67,34 @@ export class AccountsReceivableController {
     return this.accountsReceivableService.update(user.userId, id, dto);
   }
 
+  @Patch(':id/installments/mark-all-paid')
+  @ApiOperation({ summary: 'Marcar todas as parcelas como pagas' })
+  @ApiResponse({ status: 200, description: 'Todas as parcelas marcadas como pagas', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
+  markAllInstallmentsAsPaid(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.accountsReceivableService.markAllInstallmentsAsPaid(user.userId, id);
+  }
+
+  @Patch(':id/installments/:installmentId/mark-paid')
+  @ApiOperation({ summary: 'Marcar uma parcela individual como paga' })
+  @ApiResponse({ status: 200, description: 'Parcela marcada como paga', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber ou parcela não encontrada' })
+  markInstallmentAsPaid(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('installmentId') installmentId: string,
+  ) {
+    return this.accountsReceivableService.markInstallmentAsPaid(user.userId, id, installmentId);
+  }
+
   @Delete(':id')
   @HttpCode(204)
-  @ApiOperation({ summary: 'Remover conta a receber' })
+  @ApiOperation({ summary: 'Remover conta a receber (e suas parcelas)' })
   @ApiResponse({ status: 204, description: 'Conta a receber removida com sucesso' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })

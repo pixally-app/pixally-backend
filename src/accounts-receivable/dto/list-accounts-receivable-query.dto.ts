@@ -3,16 +3,17 @@ import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
 export enum AccountReceivableStatusFilter {
-  PENDENTE = 'pendente',
-  PAGO = 'pago',
-  VENCIDO = 'vencido',
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  OVERDUE = 'OVERDUE',
+  CANCELLED = 'CANCELLED',
 }
 
 export class ListAccountsReceivableQueryDto {
   @ApiPropertyOptional({
     enum: Object.values(AccountReceivableStatusFilter),
-    example: AccountReceivableStatusFilter.PENDENTE,
-    description: 'Filtro por status: pendente, pago, vencido',
+    example: AccountReceivableStatusFilter.PENDING,
+    description: 'Filtro por status: PENDING, PAID, OVERDUE, CANCELLED',
   })
   @IsOptional()
   @IsEnum(AccountReceivableStatusFilter)
@@ -22,11 +23,6 @@ export class ListAccountsReceivableQueryDto {
   @IsOptional()
   @IsUUID()
   clientId?: string;
-
-  @ApiPropertyOptional({ example: 'uuid-do-grupo', description: 'Filtrar por grupo de parcelamento' })
-  @IsOptional()
-  @IsUUID()
-  installmentGroupId?: string;
 
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
