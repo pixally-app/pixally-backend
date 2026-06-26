@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateAccountReceivableDto } from './dto/create-account-receivable.dto.js';
 import { AccountReceivableStatusFilter, ListAccountsReceivableQueryDto } from './dto/list-accounts-receivable-query.dto.js';
 import { UpdateAccountReceivableDto } from './dto/update-account-receivable.dto.js';
+import { UpdateInstallmentDto } from './dto/update-installment.dto.js';
 
 @Injectable()
 export class AccountsReceivableService {
@@ -138,13 +139,14 @@ export class AccountsReceivableService {
   async update(userId: string, id: string, dto: UpdateAccountReceivableDto) {
     const record = await this.prisma.accountReceivable.findFirst({
       where: { id, userId },
+      include: { installments: true },
     });
 
     if (!record) {
       throw new NotFoundException('Account receivable not found');
     }
 
-    const updated = await this.prisma.accountReceivable.update({
+    await this.prisma.accountReceivable.update({
       where: { id },
       data: {
         ...(dto.pixReceiptId !== undefined && { pixReceiptId: dto.pixReceiptId }),
@@ -160,7 +162,35 @@ export class AccountsReceivableService {
       },
     });
 
-    return this.toResponse(updated);
+    if (dto.totalAmount !== undefined && record.installments.length > 0) {
+      const unpaid = record.installments.filter((i) => i.paidAt === null);
+
+      if (unpaid.length > 0) {
+        const paidTotal = record.installments
+          .filter((i) => i.paidAt !== null)
+          .reduce((sum, i) => sum + Number(i.amount), 0);
+
+        const remaining = Math.round((dto.totalAmount - paidTotal) * 100) / 100;
+        const baseAmount = Math.floor((remaining / unpaid.length) * 100) / 100;
+        const remainder = Math.round((remaining - baseAmount * unpaid.length) * 100) / 100;
+
+        await this.prisma.$transaction(
+          unpaid.map((inst, i) =>
+            this.prisma.installment.update({
+              where: { id: inst.id },
+              data: { amount: i === unpaid.length - 1 ? baseAmount + remainder : baseAmount },
+            }),
+          ),
+        );
+      }
+    }
+
+    const result = await this.prisma.accountReceivable.findFirst({
+      where: { id },
+      include: { installments: { orderBy: { installmentNumber: 'asc' } } },
+    });
+
+    return this.toResponse(result!, result!.installments);
   }
 
   async markInstallmentAsPaid(userId: string, accountReceivableId: string, installmentId: string) {
@@ -223,6 +253,72 @@ export class AccountsReceivableService {
         data: { paidAt: now, status: 'PAID' },
       }),
     ]);
+
+    const updated = await this.prisma.accountReceivable.findFirst({
+      where: { id: accountReceivableId },
+      include: { installments: { orderBy: { installmentNumber: 'asc' } } },
+    });
+
+    return this.toResponse(updated!, updated!.installments);
+  }
+
+  async updateInstallment(userId: string, accountReceivableId: string, installmentId: string, dto: UpdateInstallmentDto) {
+    const record = await this.prisma.accountReceivable.findFirst({
+      where: { id: accountReceivableId, userId },
+      include: { installments: true },
+    });
+
+    if (!record) {
+      throw new NotFoundException('Account receivable not found');
+    }
+
+    const installment = record.installments.find((i) => i.id === installmentId);
+    if (!installment) {
+      throw new NotFoundException('Installment not found');
+    }
+
+    const updates: { amount?: number; dueDate?: Date } = {};
+
+    if (dto.dueDate !== undefined) {
+      updates.dueDate = new Date(dto.dueDate);
+    }
+
+    if (dto.amount !== undefined) {
+      updates.amount = dto.amount;
+
+      const totalAmount = Number(record.totalAmount);
+      const paidTotal = record.installments
+        .filter((i) => i.paidAt !== null && i.id !== installmentId)
+        .reduce((sum, i) => sum + Number(i.amount), 0);
+
+      const remaining = Math.round((totalAmount - paidTotal - dto.amount) * 100) / 100;
+      const othersUnpaid = record.installments.filter((i) => i.paidAt === null && i.id !== installmentId);
+
+      if (othersUnpaid.length > 0) {
+        if (remaining <= 0) {
+          await this.prisma.installment.deleteMany({
+            where: { id: { in: othersUnpaid.map((i) => i.id) } },
+          });
+        } else {
+          const baseAmount = Math.floor((remaining / othersUnpaid.length) * 100) / 100;
+          const remainder = Math.round((remaining - baseAmount * othersUnpaid.length) * 100) / 100;
+
+          await this.prisma.$transaction(
+            othersUnpaid.map((inst, i) =>
+              this.prisma.installment.update({
+                where: { id: inst.id },
+                data: { amount: i === othersUnpaid.length - 1 ? baseAmount + remainder : baseAmount },
+              }),
+            ),
+          );
+        }
+      }
+    }
+
+    await this.prisma.installment.update({
+      where: { id: installmentId },
+      data: updates,
+    });
 
     const updated = await this.prisma.accountReceivable.findFirst({
       where: { id: accountReceivableId },

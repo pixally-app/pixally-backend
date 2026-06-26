@@ -8,6 +8,7 @@ import { AccountReceivableResponseDto, PaginatedAccountsReceivableResponseDto } 
 import { CreateAccountReceivableDto } from './dto/create-account-receivable.dto.js';
 import { ListAccountsReceivableQueryDto } from './dto/list-accounts-receivable-query.dto.js';
 import { UpdateAccountReceivableDto } from './dto/update-account-receivable.dto.js';
+import { UpdateInstallmentDto } from './dto/update-installment.dto.js';
 
 @ApiTags('Accounts Receivable')
 @Controller('accounts-receivable')
@@ -77,6 +78,20 @@ export class AccountsReceivableController {
     @Param('id') id: string,
   ) {
     return this.accountsReceivableService.markAllInstallmentsAsPaid(user.userId, id);
+  }
+
+  @Patch(':id/installments/:installmentId')
+  @ApiOperation({ summary: 'Editar parcela (valor e/ou vencimento) — demais parcelas não pagas são reajustadas automaticamente' })
+  @ApiResponse({ status: 200, description: 'Parcela atualizada', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber ou parcela não encontrada' })
+  updateInstallment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('installmentId') installmentId: string,
+    @Body() dto: UpdateInstallmentDto,
+  ) {
+    return this.accountsReceivableService.updateInstallment(user.userId, id, installmentId, dto);
   }
 
   @Patch(':id/installments/:installmentId/mark-paid')
