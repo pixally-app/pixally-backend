@@ -92,6 +92,18 @@ export class AccountsReceivableController {
     return this.accountsReceivableService.markInstallmentAsPaid(user.userId, id, installmentId);
   }
 
+  @Patch(':id/cancel')
+  @ApiOperation({ summary: 'Cancelar conta a receber' })
+  @ApiResponse({ status: 200, description: 'Conta a receber cancelada', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
+  cancel(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.accountsReceivableService.cancel(user.userId, id);
+  }
+
   @Delete(':id')
   @HttpCode(204)
   @ApiOperation({ summary: 'Remover conta a receber (e suas parcelas)' })

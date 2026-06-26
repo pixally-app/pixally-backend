@@ -80,7 +80,8 @@ export class AccountsReceivableService {
     const installmentCount = dto.installmentCount ?? 1;
 
     if (installmentCount > 1) {
-      const installmentAmount = dto.totalAmount / installmentCount;
+      const baseAmount = Math.floor((dto.totalAmount / installmentCount) * 100) / 100;
+      const remainder = Math.round((dto.totalAmount - baseAmount * installmentCount) * 100) / 100;
       const baseDate = new Date(dto.dueDate);
 
       const record = await this.prisma.accountReceivable.create({
@@ -89,7 +90,7 @@ export class AccountsReceivableService {
           clientId: dto.clientId,
           pixReceiptId: dto.pixReceiptId ?? null,
           clientName: client.name,
-          serviceName: dto.serviceName ?? null,
+          serviceName: dto.serviceName,
           serviceDescription: dto.serviceDescription ?? null,
           totalAmount: dto.totalAmount,
           status: 'PENDING',
@@ -99,9 +100,10 @@ export class AccountsReceivableService {
             create: Array.from({ length: installmentCount }, (_, i) => {
               const dueDate = new Date(baseDate);
               dueDate.setMonth(dueDate.getMonth() + i);
+              const isLast = i === installmentCount - 1;
               return {
                 installmentNumber: i + 1,
-                amount: installmentAmount,
+                amount: isLast ? baseAmount + remainder : baseAmount,
                 dueDate,
               };
             }),
@@ -150,7 +152,10 @@ export class AccountsReceivableService {
         ...(dto.serviceDescription !== undefined && { serviceDescription: dto.serviceDescription }),
         ...(dto.totalAmount !== undefined && { totalAmount: dto.totalAmount }),
         ...(dto.dueDate !== undefined && { dueDate: new Date(dto.dueDate) }),
-        ...(dto.paidAt !== undefined && { paidAt: dto.paidAt ? new Date(dto.paidAt) : null }),
+        ...(dto.paidAt !== undefined && {
+          paidAt: dto.paidAt ? new Date(dto.paidAt) : null,
+          status: dto.paidAt ? 'PAID' : 'PENDING',
+        }),
         ...(dto.payStub !== undefined && { payStub: dto.payStub }),
       },
     });
@@ -225,6 +230,23 @@ export class AccountsReceivableService {
     });
 
     return this.toResponse(updated!, updated!.installments);
+  }
+
+  async cancel(userId: string, id: string) {
+    const record = await this.prisma.accountReceivable.findFirst({
+      where: { id, userId },
+    });
+
+    if (!record) {
+      throw new NotFoundException('Account receivable not found');
+    }
+
+    const updated = await this.prisma.accountReceivable.update({
+      where: { id },
+      data: { status: 'CANCELLED' },
+    });
+
+    return this.toResponse(updated);
   }
 
   async remove(userId: string, id: string) {
