@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AccountReceivableWhereInput } from '../../generated/prisma/models/AccountReceivable.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateAccountReceivableDto } from './dto/create-account-receivable.dto.js';
@@ -146,6 +146,19 @@ export class AccountsReceivableService {
       throw new NotFoundException('Account receivable not found');
     }
 
+    if (dto.totalAmount !== undefined && record.installments.length > 0) {
+      const unpaid = record.installments.filter((i) => i.paidAt === null);
+      if (unpaid.length > 0) {
+        const paidTotal = record.installments
+          .filter((i) => i.paidAt !== null)
+          .reduce((sum, i) => sum + Number(i.amount), 0);
+
+        if (dto.totalAmount < paidTotal) {
+          throw new BadRequestException(`Total amount cannot be less than the already paid amount (R$ ${paidTotal.toFixed(2)})`);
+        }
+      }
+    }
+
     await this.prisma.accountReceivable.update({
       where: { id },
       data: {
@@ -164,7 +177,6 @@ export class AccountsReceivableService {
 
     if (dto.totalAmount !== undefined && record.installments.length > 0) {
       const unpaid = record.installments.filter((i) => i.paidAt === null);
-
       if (unpaid.length > 0) {
         const paidTotal = record.installments
           .filter((i) => i.paidAt !== null)
@@ -183,6 +195,14 @@ export class AccountsReceivableService {
           ),
         );
       }
+    }
+
+    if (dto.paidAt !== undefined && record.installments.length > 0) {
+      const syncedPaidAt = dto.paidAt ? new Date(dto.paidAt) : null;
+      await this.prisma.installment.updateMany({
+        where: { accountReceivableId: id },
+        data: { paidAt: syncedPaidAt },
+      });
     }
 
     const result = await this.prisma.accountReceivable.findFirst({
@@ -206,6 +226,10 @@ export class AccountsReceivableService {
     const installment = record.installments.find((i) => i.id === installmentId);
     if (!installment) {
       throw new NotFoundException('Installment not found');
+    }
+
+    if (installment.paidAt) {
+      throw new BadRequestException('Installment is already paid');
     }
 
     const now = new Date();
@@ -277,6 +301,10 @@ export class AccountsReceivableService {
       throw new NotFoundException('Installment not found');
     }
 
+    if (installment.paidAt) {
+      throw new BadRequestException('Cannot edit a paid installment');
+    }
+
     const updates: { amount?: number; dueDate?: Date } = {};
 
     if (dto.dueDate !== undefined) {
@@ -296,9 +324,7 @@ export class AccountsReceivableService {
 
       if (othersUnpaid.length > 0) {
         if (remaining <= 0) {
-          await this.prisma.installment.deleteMany({
-            where: { id: { in: othersUnpaid.map((i) => i.id) } },
-          });
+          throw new BadRequestException('Installment amount exceeds the remaining balance');
         } else {
           const baseAmount = Math.floor((remaining / othersUnpaid.length) * 100) / 100;
           const remainder = Math.round((remaining - baseAmount * othersUnpaid.length) * 100) / 100;
@@ -335,6 +361,14 @@ export class AccountsReceivableService {
 
     if (!record) {
       throw new NotFoundException('Account receivable not found');
+    }
+
+    if (record.status === 'PAID') {
+      throw new BadRequestException('Cannot cancel a paid account receivable');
+    }
+
+    if (record.status === 'CANCELLED') {
+      throw new BadRequestException('Account receivable is already cancelled');
     }
 
     const updated = await this.prisma.accountReceivable.update({
