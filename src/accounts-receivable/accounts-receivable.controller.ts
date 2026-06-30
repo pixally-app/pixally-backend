@@ -1,0 +1,134 @@
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/current-user.decorator.js';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
+import type { AuthenticatedUser } from '../auth/jwt.strategy.js';
+import { AccountsReceivableService } from './accounts-receivable.service.js';
+import { AccountReceivableResponseDto, PaginatedAccountsReceivableResponseDto } from './dto/account-receivable-response.dto.js';
+import { CreateAccountReceivableDto } from './dto/create-account-receivable.dto.js';
+import { ListAccountsReceivableQueryDto } from './dto/list-accounts-receivable-query.dto.js';
+import { UpdateAccountReceivableDto } from './dto/update-account-receivable.dto.js';
+import { UpdateInstallmentDto } from './dto/update-installment.dto.js';
+
+@ApiTags('Accounts Receivable')
+@Controller('accounts-receivable')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+export class AccountsReceivableController {
+  constructor(private readonly accountsReceivableService: AccountsReceivableService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Listar contas a receber do usuário autenticado' })
+  @ApiResponse({ status: 200, description: 'Lista paginada de contas a receber', type: PaginatedAccountsReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  findAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListAccountsReceivableQueryDto,
+  ) {
+    return this.accountsReceivableService.findAll(user.userId, query);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Buscar conta a receber por ID (inclui parcelas)' })
+  @ApiResponse({ status: 200, description: 'Dados da conta a receber com parcelas', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
+  findOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.accountsReceivableService.findOne(user.userId, id);
+  }
+
+  @Post()
+  @HttpCode(201)
+  @ApiOperation({ summary: 'Criar conta a receber (com parcelas se installmentCount > 1)' })
+  @ApiResponse({ status: 201, description: 'Conta a receber criada com sucesso', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 400, description: 'Dados inválidos' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
+  create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateAccountReceivableDto,
+  ) {
+    return this.accountsReceivableService.create(user.userId, dto);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Atualizar conta a receber' })
+  @ApiResponse({ status: 200, description: 'Conta a receber atualizada com sucesso', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 400, description: 'Dados inválidos' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateAccountReceivableDto,
+  ) {
+    return this.accountsReceivableService.update(user.userId, id, dto);
+  }
+
+  @Patch(':id/installments/mark-all-paid')
+  @ApiOperation({ summary: 'Marcar todas as parcelas como pagas' })
+  @ApiResponse({ status: 200, description: 'Todas as parcelas marcadas como pagas', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
+  markAllInstallmentsAsPaid(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.accountsReceivableService.markAllInstallmentsAsPaid(user.userId, id);
+  }
+
+  @Patch(':id/installments/:installmentId')
+  @ApiOperation({ summary: 'Editar parcela (valor e/ou vencimento) — demais parcelas não pagas são reajustadas automaticamente' })
+  @ApiResponse({ status: 200, description: 'Parcela atualizada', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber ou parcela não encontrada' })
+  updateInstallment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('installmentId') installmentId: string,
+    @Body() dto: UpdateInstallmentDto,
+  ) {
+    return this.accountsReceivableService.updateInstallment(user.userId, id, installmentId, dto);
+  }
+
+  @Patch(':id/installments/:installmentId/mark-paid')
+  @ApiOperation({ summary: 'Marcar uma parcela individual como paga' })
+  @ApiResponse({ status: 200, description: 'Parcela marcada como paga', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber ou parcela não encontrada' })
+  markInstallmentAsPaid(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('installmentId') installmentId: string,
+  ) {
+    return this.accountsReceivableService.markInstallmentAsPaid(user.userId, id, installmentId);
+  }
+
+  @Patch(':id/cancel')
+  @ApiOperation({ summary: 'Cancelar conta a receber' })
+  @ApiResponse({ status: 200, description: 'Conta a receber cancelada', type: AccountReceivableResponseDto })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
+  cancel(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.accountsReceivableService.cancel(user.userId, id);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Remover conta a receber (e suas parcelas)' })
+  @ApiResponse({ status: 204, description: 'Conta a receber removida com sucesso' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.accountsReceivableService.remove(user.userId, id);
+  }
+}
