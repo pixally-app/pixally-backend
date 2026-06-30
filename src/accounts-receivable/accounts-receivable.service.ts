@@ -146,6 +146,14 @@ export class AccountsReceivableService {
       throw new NotFoundException('Account receivable not found');
     }
 
+    if (record.status === 'PAID') {
+      throw new BadRequestException('Cannot update a paid account receivable');
+    }
+
+    if (record.status === 'CANCELLED') {
+      throw new BadRequestException('Cannot update a cancelled account receivable');
+    }
+
     if (dto.totalAmount !== undefined && record.installments.length > 0) {
       const unpaid = record.installments.filter((i) => i.paidAt === null);
       if (unpaid.length > 0) {
@@ -263,6 +271,11 @@ export class AccountsReceivableService {
 
     if (!record) {
       throw new NotFoundException('Account receivable not found');
+    }
+
+    const allAlreadyPaid = record.installments.every((i) => i.paidAt !== null);
+    if (allAlreadyPaid) {
+      throw new BadRequestException('All installments are already paid');
     }
 
     const now = new Date();
@@ -386,6 +399,10 @@ export class AccountsReceivableService {
 
     if (!record) {
       throw new NotFoundException('Account receivable not found');
+    }
+
+    if (record.status === 'PAID') {
+      throw new BadRequestException('Cannot delete a paid account receivable');
     }
 
     await this.prisma.accountReceivable.delete({ where: { id } });
