@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
@@ -119,16 +119,4 @@ export class AccountsReceivableController {
     return this.accountsReceivableService.cancel(user.userId, id);
   }
 
-  @Delete(':id')
-  @HttpCode(204)
-  @ApiOperation({ summary: 'Remover conta a receber (e suas parcelas)' })
-  @ApiResponse({ status: 204, description: 'Conta a receber removida com sucesso' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
-  remove(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
-  ) {
-    return this.accountsReceivableService.remove(user.userId, id);
-  }
 }
