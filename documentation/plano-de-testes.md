@@ -185,9 +185,9 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
 | CT-CON-002-01 | Listar todas | Token válido | Lista de contas do usuário | 200 |
-| CT-CON-002-02 | Filtrar por status=pendente | Token + ?status=pendente | Apenas contas pendentes | 200 |
-| CT-CON-002-03 | Filtrar por status=conciliados | Token + ?status=conciliados | Apenas contas pagas | 200 |
-| CT-CON-002-04 | Filtrar por status=vencido | Token + ?status=vencido | Apenas contas vencidas | 200 |
+| CT-CON-002-02 | Filtrar por status=PENDING | Token + ?status=PENDING | Apenas contas pendentes | 200 |
+| CT-CON-002-03 | Filtrar por status=PAID | Token + ?status=PAID | Apenas contas pagas | 200 |
+| CT-CON-002-04 | Filtrar por status=OVERDUE | Token + ?status=OVERDUE | Apenas contas vencidas | 200 |
 | CT-CON-002-05 | Status inválido | Token + ?status=invalido | Mensagem de validação | 400 |
 | CT-CON-002-06 | Sem autenticação | Sem token | Acesso negado | 401 |
 
