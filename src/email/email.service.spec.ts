@@ -27,7 +27,7 @@ describe('EmailService', () => {
         SMTP_HOST: 'smtp.example.com',
         SMTP_PORT: '587',
         SMTP_USER: 'user@example.com',
-        SMTP_PASS: 'secret',
+        SMTP_PASS: 'test-smtp-pass',
         APP_URL: 'http://localhost:3000',
         SMTP_FROM: 'noreply@pixcheck.com',
       };
@@ -58,7 +58,7 @@ describe('EmailService', () => {
         port: 587,
         auth: {
           user: 'user@example.com',
-          pass: 'secret',
+          pass: 'test-smtp-pass',
         },
       });
     });
@@ -94,7 +94,7 @@ describe('EmailService', () => {
           SMTP_HOST: 'smtp.example.com',
           SMTP_PORT: '587',
           SMTP_USER: 'user@example.com',
-          SMTP_PASS: 'secret',
+          SMTP_PASS: 'test-smtp-pass',
           SMTP_FROM: 'noreply@pixcheck.com',
         };
         return config[key] ?? defaultValue;
@@ -115,7 +115,7 @@ describe('EmailService', () => {
           SMTP_HOST: 'smtp.example.com',
           SMTP_PORT: '587',
           SMTP_USER: 'user@example.com',
-          SMTP_PASS: 'secret',
+          SMTP_PASS: 'test-smtp-pass',
           APP_URL: 'http://localhost:3000',
         };
         return config[key] ?? defaultValue;

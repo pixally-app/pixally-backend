@@ -20,6 +20,9 @@ COPY prisma ./prisma
 COPY --from=builder /app/generated ./generated
 COPY --from=builder /app/dist ./dist
 
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 
 CMD ["node", "dist/src/main.js"]

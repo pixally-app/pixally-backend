@@ -214,33 +214,43 @@ async function main() {
     const totalAmount = faker.number.float({ min: 500, max: 5000, fractionDigits: 2 });
     const installmentCount = faker.helpers.arrayElement([1, 2, 3, 6]);
     const installmentAmount = parseFloat((totalAmount / installmentCount).toFixed(2));
-    const groupId = faker.string.uuid();
+    const baseDate = faker.date.soon({ days: 30 });
+    const isPaid = faker.datatype.boolean();
 
     const relatedReceipt = pixReceipts.find(
       (p) => p.clientId === client.id && p.receipt.status === 'validated',
     );
 
-    for (let i = 1; i <= installmentCount; i++) {
-      const isPaid = i === 1 && faker.datatype.boolean();
-      await prisma.accountReceivable.create({
-        data: {
-          userId,
-          clientId: client.id,
-          pixReceiptId: isPaid && relatedReceipt ? relatedReceipt.receipt.id : null,
-          descriptionService: faker.commerce.productName(),
-          totalAmount,
-          installmentGroupId: groupId,
-          installmentCount,
-          installmentNumber: i,
-          installmentAmount,
-          dueDate: faker.date.soon({ days: 30 * i }),
-          status: isPaid ? 'paid' : 'pending',
-          paidAt: isPaid ? faker.date.recent({ days: 5 }) : null,
-          payStub: isPaid ? faker.string.alphanumeric(12) : null,
-          matchedAutomatically: isPaid ? faker.datatype.boolean() : null,
-        },
-      });
-    }
+    await prisma.accountReceivable.create({
+      data: {
+        userId,
+        clientId: client.id,
+        clientName: client.name,
+        serviceName: faker.commerce.department(),
+        pixReceiptId: isPaid && relatedReceipt ? relatedReceipt.receipt.id : null,
+        serviceDescription: faker.commerce.productName(),
+        totalAmount,
+        status: isPaid ? 'PAID' : baseDate < new Date() ? 'OVERDUE' : 'PENDING',
+        dueDate: baseDate,
+        paidAt: isPaid ? faker.date.recent({ days: 5 }) : null,
+        payStub: isPaid ? faker.string.alphanumeric(12) : null,
+        matchedAutomatically: isPaid ? faker.datatype.boolean() : null,
+        installments: installmentCount > 1
+          ? {
+              create: Array.from({ length: installmentCount }, (_, i) => {
+                const dueDate = new Date(baseDate);
+                dueDate.setMonth(dueDate.getMonth() + i);
+                return {
+                  installmentNumber: i + 1,
+                  amount: installmentAmount,
+                  dueDate,
+                  paidAt: isPaid ? faker.date.recent({ days: 5 }) : null,
+                };
+              }),
+            }
+          : undefined,
+      },
+    });
   }
 
   console.log('Seed finalizado com sucesso!');
