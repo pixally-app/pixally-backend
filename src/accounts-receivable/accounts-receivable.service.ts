@@ -392,22 +392,6 @@ export class AccountsReceivableService {
     return this.toResponse(updated);
   }
 
-  async remove(userId: string, id: string) {
-    const record = await this.prisma.accountReceivable.findFirst({
-      where: { id, userId },
-    });
-
-    if (!record) {
-      throw new NotFoundException('Account receivable not found');
-    }
-
-    if (record.status === 'PAID') {
-      throw new BadRequestException('Cannot delete a paid account receivable');
-    }
-
-    await this.prisma.accountReceivable.delete({ where: { id } });
-  }
-
   private toInstallmentResponse(inst: {
     id: string;
     installmentNumber: number;

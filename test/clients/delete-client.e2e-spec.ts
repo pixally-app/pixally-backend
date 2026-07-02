@@ -19,6 +19,9 @@ describe('DELETE /clients/:id (CT-CLI-005)', () => {
       findFirst: jest.Mock<any>;
       update: jest.Mock<any>;
     };
+    accountReceivable: {
+      count: jest.Mock<any>;
+    };
   };
 
   const mockUserId = faker.string.uuid();
@@ -29,6 +32,9 @@ describe('DELETE /clients/:id (CT-CLI-005)', () => {
       client: {
         findFirst: jest.fn(),
         update: jest.fn(),
+      },
+      accountReceivable: {
+        count: jest.fn(),
       },
     };
 
@@ -78,6 +84,7 @@ describe('DELETE /clients/:id (CT-CLI-005)', () => {
       document: '12345678900',
       deletedAt: null,
     });
+    prismaService.accountReceivable.count.mockResolvedValue(0);
     prismaService.client.update.mockResolvedValue({});
 
     await request(app.getHttpServer())
@@ -107,7 +114,25 @@ describe('DELETE /clients/:id (CT-CLI-005)', () => {
     });
   });
 
-  it('CT-CLI-005-03 - should return 401 when no JWT token is provided', async () => {
+  it('CT-CLI-005-03 - should return 400 when client has open accounts receivable', async () => {
+    prismaService.client.findFirst.mockResolvedValue({
+      id: mockClientId,
+      userId: mockUserId,
+      name: 'Test Client',
+      document: '12345678900',
+      deletedAt: null,
+    });
+    prismaService.accountReceivable.count.mockResolvedValue(2);
+
+    const response = await request(app.getHttpServer())
+      .delete(`/clients/${mockClientId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(400);
+
+    expect(response.body).toHaveProperty('message', 'Cannot delete a client with open accounts receivable. Please cancel or resolve them first.');
+  });
+
+  it('CT-CLI-005-04 - should return 401 when no JWT token is provided', async () => {
     await request(app.getHttpServer())
       .delete(`/clients/${mockClientId}`)
       .expect(401);

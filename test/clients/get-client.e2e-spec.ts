@@ -83,8 +83,8 @@ describe('GET /clients/:id (CT-CLI-003)', () => {
       amount: null,
       _count: { pixReceipts: 3 },
       accountsReceivable: [
-        { installmentAmount: 500, paidAt: new Date() },
-        { installmentAmount: 300, paidAt: null },
+        { totalAmount: 500, paidAt: new Date() },
+        { totalAmount: 300, paidAt: null },
       ],
       phoneClients: [
         { id: faker.string.uuid(), dialCode: '+55', phoneNumber: '11987654321' },
