@@ -160,9 +160,10 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 
 | ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
-| CT-CLI-005-01 | Remoção válida (soft delete) | Token válido + ID existente | Cliente removido (deletedAt preenchido) | 204 |
+| CT-CLI-005-01 | Remoção válida (soft delete) | Token válido + ID existente sem contas abertas | Cliente removido (deletedAt preenchido) | 204 |
 | CT-CLI-005-02 | Cliente inexistente | Token válido + ID inválido | Mensagem: não encontrado | 404 |
-| CT-CLI-005-03 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-CLI-005-03 | Cliente com contas em aberto | Token válido + ID de cliente com contas PENDING ou OVERDUE | Mensagem: não é possível deletar cliente com contas abertas | 400 |
+| CT-CLI-005-04 | Sem autenticação | Sem token | Acesso negado | 401 |
 
 ### 6.3 Módulo de Contas a Receber
 
