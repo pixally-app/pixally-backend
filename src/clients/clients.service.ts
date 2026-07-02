@@ -334,6 +334,16 @@ export class ClientsService {
       throw new NotFoundException('Client not found');
     }
 
+    const openAccounts = await this.prisma.accountReceivable.count({
+      where: { clientId, status: { in: ['PENDING', 'OVERDUE'] } },
+    });
+
+    if (openAccounts > 0) {
+      throw new BadRequestException(
+        'Cannot delete a client with open accounts receivable. Please cancel or resolve them first.',
+      );
+    }
+
     await this.prisma.client.update({
       where: { id: clientId },
       data: { deletedAt: new Date() },

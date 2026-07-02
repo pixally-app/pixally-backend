@@ -160,9 +160,10 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 
 | ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
-| CT-CLI-005-01 | Remoção válida (soft delete) | Token válido + ID existente | Cliente removido (deletedAt preenchido) | 204 |
+| CT-CLI-005-01 | Remoção válida (soft delete) | Token válido + ID existente sem contas abertas | Cliente removido (deletedAt preenchido) | 204 |
 | CT-CLI-005-02 | Cliente inexistente | Token válido + ID inválido | Mensagem: não encontrado | 404 |
-| CT-CLI-005-03 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-CLI-005-03 | Cliente com contas em aberto | Token válido + ID de cliente com contas PENDING ou OVERDUE | Mensagem: não é possível deletar cliente com contas abertas | 400 |
+| CT-CLI-005-04 | Sem autenticação | Sem token | Acesso negado | 401 |
 
 ### 6.3 Módulo de Contas a Receber
 
@@ -185,13 +186,13 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
 | CT-CON-002-01 | Listar todas | Token válido | Lista de contas do usuário | 200 |
-| CT-CON-002-02 | Filtrar por status=pendente | Token + ?status=pendente | Apenas contas pendentes | 200 |
-| CT-CON-002-03 | Filtrar por status=conciliados | Token + ?status=conciliados | Apenas contas pagas | 200 |
-| CT-CON-002-04 | Filtrar por status=vencido | Token + ?status=vencido | Apenas contas vencidas | 200 |
+| CT-CON-002-02 | Filtrar por status=PENDING | Token + ?status=PENDING | Apenas contas pendentes | 200 |
+| CT-CON-002-03 | Filtrar por status=PAID | Token + ?status=PAID | Apenas contas pagas | 200 |
+| CT-CON-002-04 | Filtrar por status=OVERDUE | Token + ?status=OVERDUE | Apenas contas vencidas | 200 |
 | CT-CON-002-05 | Status inválido | Token + ?status=invalido | Mensagem de validação | 400 |
 | CT-CON-002-06 | Sem autenticação | Sem token | Acesso negado | 401 |
 
-#### CT-CON-003 — PUT /accounts-receivable/:id
+#### CT-CON-003 — PATCH /accounts-receivable/:id
 
 | ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
@@ -199,12 +200,65 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-CON-003-02 | Atualizar descrição com dados válidos | Token + nova descrição | Conta atualizada com nova descrição | 200 |
 | CT-CON-003-03 | Atualizar data de vencimento com dados válidos | Token + nova data futura | Conta atualizada com nova data | 200 |
 | CT-CON-003-04 | Atualizar todos os campos simultaneamente | Token + valor + descrição + data | Todos os campos atualizados | 200 |
-| CT-CON-003-05 | Atualizar status para conciliado manualmente | Token + status = 'conciliado' | Conta marcada como paga | 200 |
+| CT-CON-003-05 | Marcar como pago manualmente | Token + paidAt preenchido | Conta marcada como paga | 200 |
 | CT-CON-003-06 | Valor inválido (negativo) | Token + valor = -50 | Mensagem de validação | 400 |
 | CT-CON-003-07 | Data de vencimento em formato inválido | Token + data = 'abc' | Mensagem de validação | 400 |
 | CT-CON-003-08 | Conta inexistente | Token + ID inválido | Mensagem: não encontrado | 404 |
-| CT-CON-003-09 | Conta de outro usuário | Token + ID de outro usuário | Acesso negado | 403 |
+| CT-CON-003-09 | Conta de outro usuário | Token + ID de outro usuário | Não encontrado | 404 |
 | CT-CON-003-10 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-CON-003-11 | Conta já paga | Token + ID de conta com status PAID | Operação não permitida | 400 |
+| CT-CON-003-12 | Conta cancelada | Token + ID de conta com status CANCELLED | Operação não permitida | 400 |
+
+#### CT-CON-004 — GET /accounts-receivable/:id
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CON-004-01 | Conta existente com parcelas | Token + ID válido | Dados da conta com lista de parcelas | 200 |
+| CT-CON-004-02 | Conta inexistente | Token + ID inválido | Mensagem: não encontrado | 404 |
+| CT-CON-004-03 | Conta de outro usuário | Token + ID de outro usuário | Não encontrado | 404 |
+| CT-CON-004-04 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-CON-005 — PATCH /accounts-receivable/:id/cancel
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CON-005-01 | Cancelar conta pendente | Token + ID de conta PENDING | Conta com status CANCELLED | 200 |
+| CT-CON-005-02 | Conta inexistente | Token + ID inválido | Mensagem: não encontrado | 404 |
+| CT-CON-005-03 | Conta já paga | Token + ID de conta PAID | Operação não permitida | 400 |
+| CT-CON-005-04 | Conta já cancelada | Token + ID de conta CANCELLED | Operação não permitida | 400 |
+| CT-CON-005-05 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-CON-006 — PATCH /accounts-receivable/:id/installments/:installmentId
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CON-006-01 | Atualizar data de vencimento da parcela | Token + nova dueDate futura | Parcela com nova data, conta retornada | 200 |
+| CT-CON-006-02 | Atualizar valor com redistribuição automática | Token + novo amount válido | Demais parcelas redistribuídas proporcionalmente | 200 |
+| CT-CON-006-03 | Parcela já paga | Token + installmentId com paidAt | Operação não permitida | 400 |
+| CT-CON-006-04 | Valor excede saldo disponível | Token + amount maior que o total da conta | Mensagem: saldo insuficiente | 400 |
+| CT-CON-006-05 | Conta inexistente | Token + ID de conta inválido | Mensagem: não encontrado | 404 |
+| CT-CON-006-06 | Parcela não pertence à conta | Token + installmentId de outra conta | Mensagem: parcela não encontrada | 404 |
+| CT-CON-006-07 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-CON-007 — PATCH /accounts-receivable/:id/installments/:installmentId/mark-paid
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CON-007-01 | Marcar última parcela como paga | Token + installmentId da única parcela pendente | Conta marcada como PAID automaticamente | 200 |
+| CT-CON-007-02 | Marcar parcela com outras ainda abertas | Token + installmentId de uma parcela pendente | Conta permanece PENDING | 200 |
+| CT-CON-007-03 | Parcela já paga | Token + installmentId com paidAt | Operação não permitida | 400 |
+| CT-CON-007-04 | Conta inexistente | Token + ID de conta inválido | Mensagem: não encontrado | 404 |
+| CT-CON-007-05 | Parcela não pertence à conta | Token + installmentId de outra conta | Mensagem: parcela não encontrada | 404 |
+| CT-CON-007-06 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-CON-008 — PATCH /accounts-receivable/:id/installments/mark-all-paid
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-CON-008-01 | Marcar todas as parcelas como pagas | Token + ID de conta com parcelas pendentes | Todas as parcelas pagas, conta com status PAID | 200 |
+| CT-CON-008-02 | Todas as parcelas já pagas | Token + ID de conta com todas parcelas pagas | Operação não permitida | 400 |
+| CT-CON-008-03 | Conta inexistente | Token + ID inválido | Mensagem: não encontrado | 404 |
+| CT-CON-008-04 | Sem autenticação | Sem token | Acesso negado | 401 |
 
 ### 6.4 Módulo de Comprovantes
 
