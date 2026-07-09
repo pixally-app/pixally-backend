@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { PrismaClient } from '../generated/prisma/client.js';
+import { PrismaClient, Role } from '../generated/prisma/client.js';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { faker } from '@faker-js/faker/locale/pt_BR';
 
@@ -49,7 +49,7 @@ async function main() {
       password: '$2a$12$g/n3MFCBKlSey9YCyGQ0QeLZ0YD08j3BqkkhD38bZA5JaYusR2FDi',
       document: generateCpf(),
       phone: generatePhone(),
-      role: 'admin',
+      role: Role.admin,
       isActive: true,
     },
   });
@@ -61,7 +61,7 @@ async function main() {
       password: '$2b$10$fakehashedpassword0987654321',
       document: generateCnpj(),
       phone: generatePhone(),
-      role: 'user',
+      role: Role.user,
       isActive: true,
     },
   });
