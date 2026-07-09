@@ -9,8 +9,9 @@ datasource db {
 
 model User {
   id        String   @id @default(uuid()) @db.Uuid
-  username  String
-  email     String   @unique
+  username    String
+  companyName String? @map("company_name")
+  email       String  @unique
   document  String   @unique
   phone     String
   password  String

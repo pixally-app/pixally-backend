@@ -1,6 +1,7 @@
 CREATE TABLE "users" (
     "id" UUID NOT NULL,
     "username" TEXT NOT NULL,
+    "company_name" TEXT,
     "email" TEXT NOT NULL,
     "document" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
