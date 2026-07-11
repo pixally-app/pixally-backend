@@ -1,57 +1,18 @@
 import { jest } from '@jest/globals';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { JwtModule, JwtService } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { faker } from '@faker-js/faker';
 import request from 'supertest';
 import { AccountsReceivableController } from '../../src/accounts-receivable/accounts-receivable.controller.js';
 import { AccountsReceivableService } from '../../src/accounts-receivable/accounts-receivable.service.js';
-import { PrismaService } from '../../src/prisma/prisma.service.js';
-import { JwtStrategy } from '../../src/auth/jwt.strategy.js';
-
-const buildSharedApp = async () => {
-  const prismaService = {
-    accountReceivable: {
-      findFirst: jest.fn(),
-      update: jest.fn(),
-    },
-    installment: {
-      update: jest.fn(),
-      updateMany: jest.fn(),
-    },
-    $transaction: jest.fn().mockImplementation((args: any[]) => Promise.all(args)),
-  };
-
-  const moduleFixture: TestingModule = await Test.createTestingModule({
-    imports: [
-      JwtModule.register({ secret: 'test-secret-key', signOptions: { expiresIn: '1h' } }),
-      PassportModule.register({ defaultStrategy: 'jwt' }),
-    ],
-    controllers: [AccountsReceivableController],
-    providers: [
-      AccountsReceivableService,
-      { provide: PrismaService, useValue: prismaService },
-      {
-        provide: JwtStrategy,
-        useFactory: () => new JwtStrategy({ getOrThrow: () => 'test-secret-key' } as any),
-      },
-    ],
-  }).compile();
-
-  const app = moduleFixture.createNestApplication();
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
-  await app.init();
-
-  const jwtService = moduleFixture.get(JwtService);
-  return { app, prismaService, jwtService };
-};
+import { buildTestApp } from '../helpers/build-test-app.js';
 
 describe('PATCH /accounts-receivable/:id/installments/:installmentId/mark-paid (CT-CON-007)', () => {
   let app: INestApplication;
   let jwtService: JwtService;
   let accessToken: string;
   let prismaService: {
+    user: { findUnique: jest.Mock<any> };
     accountReceivable: { findFirst: jest.Mock<any>; update: jest.Mock<any> };
     installment: { update: jest.Mock<any>; updateMany: jest.Mock<any> };
     $transaction: jest.Mock<any>;
@@ -93,11 +54,28 @@ describe('PATCH /accounts-receivable/:id/installments/:installmentId/mark-paid (
   });
 
   beforeAll(async () => {
-    ({ app, prismaService, jwtService } = await buildSharedApp());
+    prismaService = {
+      user: { findUnique: jest.fn() },
+      accountReceivable: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      installment: {
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      $transaction: jest.fn().mockImplementation((args: any[]) => Promise.all(args)),
+    };
+    ({ app, jwtService } = await buildTestApp({
+      controllers: [AccountsReceivableController],
+      providers: [AccountsReceivableService],
+      prismaService,
+    }));
     accessToken = jwtService.sign({ sub: mockUserId, email: 'test@test.com', role: 'user' });
   });
 
   afterAll(async () => { await app.close(); });
+  beforeEach(() => { prismaService.user.findUnique.mockResolvedValue({ isActive: true }); });
   afterEach(() => { jest.resetAllMocks(); });
 
   it('CT-CON-007-01 - should return 200 and mark account as PAID when last installment is marked', async () => {
@@ -179,6 +157,7 @@ describe('PATCH /accounts-receivable/:id/installments/mark-all-paid (CT-CON-008)
   let jwtService: JwtService;
   let accessToken: string;
   let prismaService: {
+    user: { findUnique: jest.Mock<any> };
     accountReceivable: { findFirst: jest.Mock<any>; update: jest.Mock<any> };
     installment: { update: jest.Mock<any>; updateMany: jest.Mock<any> };
     $transaction: jest.Mock<any>;
@@ -220,11 +199,28 @@ describe('PATCH /accounts-receivable/:id/installments/mark-all-paid (CT-CON-008)
   });
 
   beforeAll(async () => {
-    ({ app, prismaService, jwtService } = await buildSharedApp());
+    prismaService = {
+      user: { findUnique: jest.fn() },
+      accountReceivable: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      installment: {
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      $transaction: jest.fn().mockImplementation((args: any[]) => Promise.all(args)),
+    };
+    ({ app, jwtService } = await buildTestApp({
+      controllers: [AccountsReceivableController],
+      providers: [AccountsReceivableService],
+      prismaService,
+    }));
     accessToken = jwtService.sign({ sub: mockUserId, email: 'test@test.com', role: 'user' });
   });
 
   afterAll(async () => { await app.close(); });
+  beforeEach(() => { prismaService.user.findUnique.mockResolvedValue({ isActive: true }); });
   afterEach(() => { jest.resetAllMocks(); });
 
   it('CT-CON-008-01 - should return 200 and mark all installments as paid', async () => {
