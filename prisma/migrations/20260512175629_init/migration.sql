@@ -1,11 +1,14 @@
+CREATE TYPE "Role" AS ENUM ('admin', 'user');
+
 CREATE TABLE "users" (
     "id" UUID NOT NULL,
     "username" TEXT NOT NULL,
+    "company_name" TEXT,
     "email" TEXT NOT NULL,
     "document" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
     "password" TEXT NOT NULL,
-    "role" TEXT NOT NULL,
+    "role" "Role" NOT NULL,
     "is_active" BOOLEAN,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
