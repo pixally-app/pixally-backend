@@ -24,6 +24,7 @@ Este plano de testes descreve os cenários, critérios de aceitação e verifica
 ### 3.1 Funcionalidades Incluídas no Escopo
 
 - Módulo de Autenticação (registro, login, recuperação de senha)
+- Módulo de Usuários (perfil, atualização, criação e desativação por admin)
 - Módulo de Clientes (CRUD completo)
 - Módulo de Contas a Receber (CRUD + filtros por status)
 - Módulo de Comprovantes (upload, extração OCR, validação por IA)
@@ -107,7 +108,53 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-AUTH-003-03 | Email em formato inválido | email = 'invalido' | Mensagem de validação | 400 |
 | CT-AUTH-003-04 | Campo email ausente | Body vazio | Mensagem de validação | 400 |
 
-### 6.2 Módulo de Clientes
+### 6.2 Módulo de Usuários
+
+#### CT-USR-001 — GET /users/me
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-USR-001-01 | Retornar dados do usuário autenticado | Token válido | Dados do usuário sem senha | 200 |
+| CT-USR-001-02 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-USR-001-03 | Token de usuário inativo | Token de usuário com isActive = false | Acesso negado | 401 |
+
+#### CT-USR-002 — PATCH /users/me
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-USR-002-01 | Atualizar username com dados válidos | Token válido + novo username | Usuário atualizado | 200 |
+| CT-USR-002-02 | Atualizar email com dados válidos | Token válido + novo email disponível | Usuário atualizado com novo email | 200 |
+| CT-USR-002-03 | Atualizar companyName | Token válido + novo companyName | Usuário atualizado | 200 |
+| CT-USR-002-04 | Email já em uso por outro usuário | Token válido + email de outro usuário | Mensagem: email já está em uso | 409 |
+| CT-USR-002-05 | Email em formato inválido | Token válido + email = 'invalido' | Mensagem de validação | 400 |
+| CT-USR-002-06 | Body vazio | Token válido + body {} | Usuário retornado sem alterações | 200 |
+| CT-USR-002-07 | Sem autenticação | Sem token | Acesso negado | 401 |
+| CT-USR-002-08 | Token de usuário inativo | Token de usuário com isActive = false | Acesso negado | 401 |
+
+#### CT-USR-003 — POST /users
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-USR-003-01 | Admin cria usuário com dados válidos | Token admin + dados completos | Usuário criado sem senha na resposta | 201 |
+| CT-USR-003-02 | Email já cadastrado | Token admin + email existente | Mensagem: email já cadastrado | 409 |
+| CT-USR-003-03 | Documento já cadastrado | Token admin + documento existente | Mensagem: documento já cadastrado | 409 |
+| CT-USR-003-04 | Campos obrigatórios ausentes | Token admin + body incompleto | Mensagem de validação | 400 |
+| CT-USR-003-05 | Senha sem letra maiúscula | Token admin + senha = 'abc@123' | Mensagem de validação | 400 |
+| CT-USR-003-06 | Senha sem número | Token admin + senha = 'Abc@def' | Mensagem de validação | 400 |
+| CT-USR-003-07 | Senha sem caractere especial | Token admin + senha = 'Abc1234' | Mensagem de validação | 400 |
+| CT-USR-003-08 | Usuário com role user tenta criar | Token user | Acesso negado | 403 |
+| CT-USR-003-09 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-USR-004 — DELETE /users/:id
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-USR-004-01 | Admin desativa usuário existente | Token admin + ID válido | Usuário com isActive = false, sem conteúdo | 204 |
+| CT-USR-004-02 | Usuário inexistente | Token admin + ID inválido | Mensagem: não encontrado | 404 |
+| CT-USR-004-03 | Usuário com role user tenta desativar | Token user + ID válido | Acesso negado | 403 |
+| CT-USR-004-04 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+### 6.3 Módulo de Clientes
 
 #### CT-CLI-001 — POST /clients
 
