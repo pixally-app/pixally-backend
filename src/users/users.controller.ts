@@ -17,6 +17,23 @@ import { UsersService } from './users.service.js';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Get('me')
+  @ApiOperation({ summary: 'Retorna dados do usuário autenticado' })
+  @ApiResponse({ status: 200, description: 'Dados do usuário' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  getMe(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.findMe(user.userId);
+  }
+
+  @Patch('me')
+  @ApiOperation({ summary: 'Atualiza dados do usuário autenticado' })
+  @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 409, description: 'Email já está em uso' })
+  updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateUserDto) {
+    return this.usersService.updateMe(user.userId, dto);
+  }
+
   @Post()
   @HttpCode(201)
   @UseGuards(RolesGuard)
@@ -34,29 +51,12 @@ export class UsersController {
   @HttpCode(204)
   @UseGuards(RolesGuard)
   @Roles(Role.admin)
-  @ApiOperation({ summary: 'Remove um usuário (apenas admin)' })
-  @ApiResponse({ status: 204, description: 'Usuário removido com sucesso' })
+  @ApiOperation({ summary: 'Desativa um usuário (apenas admin)' })
+  @ApiResponse({ status: 204, description: 'Usuário desativado com sucesso' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   @ApiResponse({ status: 403, description: 'Acesso negado' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
-  }
-
-  @Get('me')
-  @ApiOperation({ summary: 'Retorna dados do usuário autenticado' })
-  @ApiResponse({ status: 200, description: 'Dados do usuário' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  getMe(@CurrentUser() user: AuthenticatedUser) {
-    return this.usersService.findMe(user.userId);
-  }
-
-  @Patch('me')
-  @ApiOperation({ summary: 'Atualiza dados do usuário autenticado' })
-  @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso' })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  @ApiResponse({ status: 409, description: 'Email já está em uso' })
-  updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateUserDto) {
-    return this.usersService.updateMe(user.userId, dto);
   }
 }

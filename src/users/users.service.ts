@@ -5,6 +5,17 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 
+const USER_SELECT = {
+  id: true,
+  username: true,
+  companyName: true,
+  email: true,
+  document: true,
+  phone: true,
+  role: true,
+  createdAt: true,
+} as const;
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -12,16 +23,7 @@ export class UsersService {
   async findMe(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        id: true,
-        username: true,
-        companyName: true,
-        email: true,
-        document: true,
-        phone: true,
-        role: true,
-        createdAt: true,
-      },
+      select: USER_SELECT,
     });
 
     if (!user) throw new NotFoundException('Usuário não encontrado');
@@ -38,33 +40,34 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.prisma.user.create({
-      data: {
-        username: dto.username,
-        companyName: dto.companyName,
-        email: dto.email,
-        document: dto.document,
-        phone: dto.phone,
-        password: hashedPassword,
-        role: dto.role ?? Role.user,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        username: true,
-        companyName: true,
-        email: true,
-        document: true,
-        phone: true,
-        role: true,
-        createdAt: true,
-      },
-    });
-
-    return user;
+    try {
+      return await this.prisma.user.create({
+        data: {
+          username: dto.username,
+          companyName: dto.companyName,
+          email: dto.email,
+          document: dto.document,
+          phone: dto.phone,
+          password: hashedPassword,
+          role: Role.user,
+          isActive: true,
+        },
+        select: USER_SELECT,
+      });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        const field = error.meta?.target?.[0];
+        if (field === 'document') throw new ConflictException('Documento já cadastrado');
+        throw new ConflictException('Email já cadastrado');
+      }
+      throw error;
+    }
   }
 
   async updateMe(userId: string, dto: UpdateUserDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuário não encontrado');
+
     if (dto.email) {
       const existing = await this.prisma.user.findFirst({
         where: { email: dto.email, id: { not: userId } },
@@ -74,17 +77,12 @@ export class UsersService {
 
     return this.prisma.user.update({
       where: { id: userId },
-      data: dto,
-      select: {
-        id: true,
-        username: true,
-        companyName: true,
-        email: true,
-        document: true,
-        phone: true,
-        role: true,
-        createdAt: true,
+      data: {
+        username: dto.username,
+        email: dto.email,
+        companyName: dto.companyName,
       },
+      select: USER_SELECT,
     });
   }
 
@@ -92,6 +90,9 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Usuário não encontrado');
 
-    await this.prisma.user.delete({ where: { id } });
+    await this.prisma.user.update({
+      where: { id },
+      data: { isActive: false },
+    });
   }
 }

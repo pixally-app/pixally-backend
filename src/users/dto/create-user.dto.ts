@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
-import { Role } from '../../../generated/prisma/client.js';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'João Silva' })
@@ -35,9 +34,4 @@ export class CreateUserDto {
   @Matches(/[0-9]/, { message: 'password must contain at least one number' })
   @Matches(/[^A-Za-z0-9]/, { message: 'password must contain at least one special character' })
   password: string;
-
-  @ApiPropertyOptional({ enum: Role, default: Role.user })
-  @IsOptional()
-  @IsEnum(Role)
-  role?: Role;
 }
