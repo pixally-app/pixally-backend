@@ -1,20 +1,18 @@
 import { jest } from '@jest/globals';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { JwtModule, JwtService } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { faker } from '@faker-js/faker';
 import request from 'supertest';
 import { AccountsReceivableController } from '../../src/accounts-receivable/accounts-receivable.controller.js';
 import { AccountsReceivableService } from '../../src/accounts-receivable/accounts-receivable.service.js';
-import { PrismaService } from '../../src/prisma/prisma.service.js';
-import { JwtStrategy } from '../../src/auth/jwt.strategy.js';
+import { buildTestApp } from '../helpers/build-test-app.js';
 
 describe('POST /accounts-receivable (CT-CON-001)', () => {
   let app: INestApplication;
   let jwtService: JwtService;
   let accessToken: string;
   let prismaService: {
+    user: { findUnique: jest.Mock<any> };
     client: { findFirst: jest.Mock<any> };
     accountReceivable: { create: jest.Mock<any> };
   };
@@ -59,42 +57,25 @@ describe('POST /accounts-receivable (CT-CON-001)', () => {
 
   beforeAll(async () => {
     prismaService = {
+      user: { findUnique: jest.fn() },
       client: { findFirst: jest.fn() },
       accountReceivable: { create: jest.fn() },
     };
 
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [
-        JwtModule.register({
-          secret: 'test-secret-key',
-          signOptions: { expiresIn: '1h' },
-        }),
-        PassportModule.register({ defaultStrategy: 'jwt' }),
-      ],
+    ({ app, jwtService } = await buildTestApp({
       controllers: [AccountsReceivableController],
-      providers: [
-        AccountsReceivableService,
-        { provide: PrismaService, useValue: prismaService },
-        {
-          provide: JwtStrategy,
-          useFactory: () =>
-            new JwtStrategy({
-              getOrThrow: () => 'test-secret-key',
-            } as any),
-        },
-      ],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
-    await app.init();
-
-    jwtService = moduleFixture.get(JwtService);
+      providers: [AccountsReceivableService],
+      prismaService,
+    }));
     accessToken = jwtService.sign({ sub: mockUserId, email: 'test@test.com', role: 'user' });
   });
 
   afterAll(async () => {
     await app.close();
+  });
+
+  beforeEach(() => {
+    prismaService.user.findUnique.mockResolvedValue({ isActive: true });
   });
 
   afterEach(() => {
