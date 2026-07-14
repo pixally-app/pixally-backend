@@ -23,13 +23,17 @@ CREATE UNIQUE INDEX "users_document_key" ON "users"("document");
 CREATE TABLE "zapify_integration" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
-    "active" BOOLEAN,
+    "active" BOOLEAN NOT NULL DEFAULT false,
     "instance_api_url" TEXT,
-    "instance_key" TEXT,
-    "instance_token" TEXT,
+    "instance_key" TEXT NOT NULL,
+    "instance_token" TEXT NOT NULL,
+    "connected_at" TIMESTAMP(3),
+    "disconnected_at" TIMESTAMP(3),
 
     CONSTRAINT "zapify_integration_pkey" PRIMARY KEY ("id")
 );
+
+CREATE UNIQUE INDEX "zapify_integration_instance_key_key" ON "zapify_integration"("instance_key");
 
 CREATE TABLE "clients" (
     "id" UUID NOT NULL,

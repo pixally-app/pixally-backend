@@ -51,10 +51,12 @@ model PasswordResetToken {
 model ZapifyIntegration {
   id             String   @id @default(uuid()) @db.Uuid
   userId         String   @map("user_id") @db.Uuid
-  active         Boolean?
+  active         Boolean  @default(false)
   instanceApiUrl String?  @map("instance_api_url")
-  instanceKey    String?  @map("instance_key")
-  instanceToken  String?  @map("instance_token")
+  instanceKey    String   @unique @map("instance_key")
+  instanceToken  String   @map("instance_token")
+  connectedAt    DateTime? @map("connected_at")
+  disconnectedAt DateTime? @map("disconnected_at")
 
   user User @relation(fields: [userId], references: [id])
 
