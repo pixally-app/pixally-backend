@@ -50,6 +50,7 @@ export class ZapfyController {
   }
 
   @Post('admin/users/:userId/connect')
+  @HttpCode(200)
   @UseGuards(RolesGuard)
   @Roles(Role.admin)
   @ApiOperation({ summary: 'Vincular instância Zapfy a um usuário e configurar webhook' })

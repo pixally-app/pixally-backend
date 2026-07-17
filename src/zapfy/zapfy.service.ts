@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ZapfyClient } from './zapfy.client.js';
 import type { ConnectIntegrationDto } from './dto/connect-integration.dto.js';
@@ -16,7 +15,6 @@ export class ZapfyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly zapfyClient: ZapfyClient,
-    private readonly config: ConfigService,
   ) {}
 
   async connectInstance(userId: string, dto: ConnectIntegrationDto) {
@@ -165,6 +163,7 @@ export class ZapfyService {
     const { instanceKey, data } = payload;
     const { key, message } = data;
 
+    if (key.fromMe) return;
     // ignore group messages — only direct contacts are processed
     if (key.remoteJid.endsWith('@g.us')) return;
 

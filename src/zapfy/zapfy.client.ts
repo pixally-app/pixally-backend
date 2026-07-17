@@ -64,6 +64,4 @@ export class ZapfyClient {
     const data = await res.json() as { result: { state: string }; isValid: boolean };
     return { state: data.result.state };
   }
-
-
 }

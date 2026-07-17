@@ -35,7 +35,7 @@ export interface ZapfyNewMessageData {
 export interface ZapfyMessageUpdate {
   message: unknown;
   messageStubType: number;
-  key: ZapfyMessageKey;
+  key?: ZapfyMessageKey;
 }
 
 export interface ZapfyMessageUpdateData {
