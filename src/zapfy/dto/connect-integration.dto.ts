@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class ConnectIntegrationDto {
@@ -12,8 +12,4 @@ export class ConnectIntegrationDto {
   @IsNotEmpty()
   instanceToken: string;
 
-  @ApiPropertyOptional({ example: 'https://api.zapfy.me/v1', description: 'URL base da API Zapfy' })
-  @IsOptional()
-  @IsString()
-  instanceApiUrl?: string;
 }

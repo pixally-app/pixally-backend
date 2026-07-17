@@ -1,50 +1,69 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ZapfyClient {
   private readonly baseUrl: string;
+  private readonly logger = new Logger(ZapfyClient.name);
 
   constructor(private readonly config: ConfigService) {
     this.baseUrl = config.getOrThrow<string>('ZAPFY_BASE_URL');
   }
 
-  private instanceUrl(instanceKey: string, instanceToken: string, instanceApiUrl?: string | null) {
-    const base = instanceApiUrl ?? this.baseUrl;
-    return `${base}/instance/${instanceKey}/token/${instanceToken}`;
+  private instanceUrl(instanceKey: string, instanceToken: string) {
+    return `${this.baseUrl}/instance/${instanceKey}/token/${instanceToken}`;
   }
 
-  async getQrCode(instanceKey: string, instanceToken: string, instanceApiUrl?: string | null) {
-    const url = `${this.instanceUrl(instanceKey, instanceToken, instanceApiUrl)}/connect`;
+  private async throwWithBody(res: Response, label: string): Promise<never> {
+    const body = await res.text().catch(() => '(sem body)');
+    this.logger.error(`${label} — status ${res.status}: ${body}`);
+
+    if (res.status === 401) {
+      throw new UnprocessableEntityException(
+        'Invalid Zapfy credentials. Check the instanceKey and instanceToken.',
+      );
+    }
+
+    throw new InternalServerErrorException(`${label} (${res.status}): ${body}`);
+  }
+
+  async getQrCode(instanceKey: string, instanceToken: string) {
+    const url = `${this.instanceUrl(instanceKey, instanceToken)}/connect`;
     const res = await fetch(url, { method: 'POST' });
 
-    if (!res.ok) throw new InternalServerErrorException('Zapfy: erro ao buscar QR code');
+    if (!res.ok) return this.throwWithBody(res, 'Zapfy: erro ao buscar QR code');
 
-    return res.json() as Promise<{ qrcode: string }>;
+    const data = await res.json() as {
+      result: { qrCode?: string; state: string; contact?: { id: string } };
+      isValid: boolean;
+    };
+
+    return {
+      qrCode: data.result.qrCode ?? null,
+      state: data.result.state,
+    };
   }
 
-  async getState(instanceKey: string, instanceToken: string, instanceApiUrl?: string | null) {
-    const url = `${this.instanceUrl(instanceKey, instanceToken, instanceApiUrl)}/getState`;
+  async disconnect(instanceKey: string, instanceToken: string) {
+    const url = `${this.instanceUrl(instanceKey, instanceToken)}/disconnect`;
+    const res = await fetch(url, { method: 'POST' });
+    if (!res.ok) return this.throwWithBody(res, 'Zapfy: erro ao desconectar instância');
+  }
+
+  async getState(instanceKey: string, instanceToken: string) {
+    const url = `${this.instanceUrl(instanceKey, instanceToken)}/getState`;
     const res = await fetch(url);
 
-    if (!res.ok) throw new InternalServerErrorException('Zapfy: erro ao buscar status');
+    if (!res.ok) return this.throwWithBody(res, 'Zapfy: erro ao buscar status');
 
-    return res.json() as Promise<{ state: string }>;
+    const data = await res.json() as { result: { state: string }; isValid: boolean };
+    return { state: data.result.state };
   }
 
-  async updateWebhook(
-    instanceKey: string,
-    instanceToken: string,
-    webhookUrl: string,
-    instanceApiUrl?: string | null,
-  ) {
-    const url = `${this.instanceUrl(instanceKey, instanceToken, instanceApiUrl)}/updateWebhook`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webhookUrl }),
-    });
 
-    if (!res.ok) throw new InternalServerErrorException('Zapfy: erro ao configurar webhook');
-  }
 }
