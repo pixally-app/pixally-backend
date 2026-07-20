@@ -36,7 +36,6 @@ async function main() {
   await prisma.warning.deleteMany();
   await prisma.pixReceiptBlob.deleteMany();
   await prisma.pixReceipt.deleteMany();
-  await prisma.monitoredContact.deleteMany();
   await prisma.phoneClient.deleteMany();
   await prisma.client.deleteMany();
   await prisma.zapifyIntegration.deleteMany();
@@ -64,27 +63,6 @@ async function main() {
       phone: generatePhone(),
       role: Role.user,
       isActive: true,
-    },
-  });
-
-  console.log('Criando integrações Zapify...');
-  await prisma.zapifyIntegration.create({
-    data: {
-      userId: user1.id,
-      active: true,
-      instanceApiUrl: 'https://api.zapify.example.com/instance1',
-      instanceKey: faker.string.alphanumeric(32),
-      instanceToken: faker.string.alphanumeric(64),
-    },
-  });
-
-  await prisma.zapifyIntegration.create({
-    data: {
-      userId: user2.id,
-      active: false,
-      instanceApiUrl: 'https://api.zapify.example.com/instance2',
-      instanceKey: faker.string.alphanumeric(32),
-      instanceToken: faker.string.alphanumeric(64),
     },
   });
 
@@ -116,140 +94,6 @@ async function main() {
         clientId: client.id,
         dialCode: '+55',
         phoneNumber: generatePhone(),
-      },
-    });
-  }
-
-  console.log('Criando contatos monitorados...');
-  for (const { client, userId } of clients.slice(0, 4)) {
-    await prisma.monitoredContact.create({
-      data: {
-        userId,
-        clientId: client.id,
-        phoneJid: `55${generatePhone()}@s.whatsapp.net`,
-        isActive: true,
-      },
-    });
-  }
-
-  console.log('Criando comprovantes PIX...');
-  const pixReceipts = [];
-  const banks = ['Banco do Brasil', 'Itaú', 'Bradesco', 'Nubank', 'Santander', 'Caixa'];
-  const statuses = ['pending', 'validated', 'rejected', 'processing'];
-
-  for (const { client, userId } of clients) {
-    for (let i = 0; i < faker.number.int({ min: 2, max: 4 }); i++) {
-      const depositAmount = faker.number.float({ min: 50, max: 10000, fractionDigits: 2 });
-      const receipt = await prisma.pixReceipt.create({
-        data: {
-          userId,
-          clientId: client.id,
-          status: faker.helpers.arrayElement(statuses),
-          origin: 'whatsapp',
-          documentFormat: faker.helpers.arrayElement(['image', 'pdf']),
-          description: `Pagamento ${faker.commerce.productName()}`,
-          depositDateTime: faker.date.recent({ days: 30 }),
-          depositAmount,
-          depositOriginName: faker.person.fullName(),
-          depositOriginDocument: generateCpf(),
-          depositOriginDocumentType: 'CPF',
-          depositOriginBank: faker.helpers.arrayElement(banks),
-          depositOriginAgency: faker.string.numeric(4),
-          depositOriginAccount: faker.string.numeric(8),
-          depositDestinationName: client.name,
-          depositDestinationDocument: client.document,
-          depositDestinationDocumentType: client.documentType ?? 'CPF',
-          depositDestinationBank: faker.helpers.arrayElement(banks),
-          depositDestinationAgency: faker.string.numeric(4),
-          depositDestinationAccount: faker.string.numeric(8),
-          pixTransactionId: faker.string.uuid(),
-          processmentOcrOutcome: JSON.stringify({
-            raw: `PIX recebido R$ ${depositAmount}`,
-            confidence: faker.number.float({ min: 0.85, max: 0.99, fractionDigits: 2 }),
-          }),
-          jid: `55${generatePhone()}@s.whatsapp.net`,
-          messageId: faker.string.alphanumeric(20),
-          isDeletedWhatsapp: false,
-        },
-      });
-      pixReceipts.push({ receipt, userId, clientId: client.id });
-    }
-  }
-
-  console.log('Criando blobs dos comprovantes...');
-  for (const { receipt } of pixReceipts) {
-    await prisma.pixReceiptBlob.create({
-      data: {
-        pixReceiptsId: receipt.id,
-        mimeType: receipt.documentFormat === 'pdf' ? 'application/pdf' : 'image/jpeg',
-        filePath: `/uploads/receipts/${receipt.id}.${receipt.documentFormat === 'pdf' ? 'pdf' : 'jpg'}`,
-        fileUrl: `https://storage.example.com/receipts/${receipt.id}`,
-      },
-    });
-  }
-
-  console.log('Criando alertas (warnings)...');
-  const warningTypes = ['duplicate', 'amount_mismatch', 'expired', 'invalid_document'];
-
-  for (const { receipt, clientId } of pixReceipts.slice(0, 5)) {
-    await prisma.warning.create({
-      data: {
-        pixReceiptId: receipt.id,
-        clientId,
-        type: faker.helpers.arrayElement(warningTypes),
-        message: faker.helpers.arrayElement([
-          'Comprovante possivelmente duplicado',
-          'Valor do comprovante diverge do esperado',
-          'Comprovante expirado (mais de 24h)',
-          'Documento do pagador não confere',
-        ]),
-        resolved: faker.datatype.boolean(),
-        resolutionReason: faker.datatype.boolean() ? 'Verificado manualmente' : null,
-        resolvedAt: faker.datatype.boolean() ? faker.date.recent({ days: 7 }) : null,
-      },
-    });
-  }
-
-  console.log('Criando contas a receber...');
-  for (const { client, userId } of clients) {
-    const totalAmount = faker.number.float({ min: 500, max: 5000, fractionDigits: 2 });
-    const installmentCount = faker.helpers.arrayElement([1, 2, 3, 6]);
-    const installmentAmount = parseFloat((totalAmount / installmentCount).toFixed(2));
-    const baseDate = faker.date.soon({ days: 30 });
-    const isPaid = faker.datatype.boolean();
-
-    const relatedReceipt = pixReceipts.find(
-      (p) => p.clientId === client.id && p.receipt.status === 'validated',
-    );
-
-    await prisma.accountReceivable.create({
-      data: {
-        userId,
-        clientId: client.id,
-        clientName: client.name,
-        serviceName: faker.commerce.department(),
-        pixReceiptId: isPaid && relatedReceipt ? relatedReceipt.receipt.id : null,
-        serviceDescription: faker.commerce.productName(),
-        totalAmount,
-        status: isPaid ? 'PAID' : baseDate < new Date() ? 'OVERDUE' : 'PENDING',
-        dueDate: baseDate,
-        paidAt: isPaid ? faker.date.recent({ days: 5 }) : null,
-        payStub: isPaid ? faker.string.alphanumeric(12) : null,
-        matchedAutomatically: isPaid ? faker.datatype.boolean() : null,
-        installments: installmentCount > 1
-          ? {
-              create: Array.from({ length: installmentCount }, (_, i) => {
-                const dueDate = new Date(baseDate);
-                dueDate.setMonth(dueDate.getMonth() + i);
-                return {
-                  installmentNumber: i + 1,
-                  amount: installmentAmount,
-                  dueDate,
-                  paidAt: isPaid ? faker.date.recent({ days: 5 }) : null,
-                };
-              }),
-            }
-          : undefined,
       },
     });
   }

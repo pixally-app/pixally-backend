@@ -23,13 +23,16 @@ CREATE UNIQUE INDEX "users_document_key" ON "users"("document");
 CREATE TABLE "zapify_integration" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
-    "active" BOOLEAN,
-    "instance_api_url" TEXT,
-    "instance_key" TEXT,
-    "instance_token" TEXT,
+    "active" BOOLEAN NOT NULL DEFAULT false,
+    "instance_key" TEXT NOT NULL,
+    "instance_token" TEXT NOT NULL,
+    "connected_at" TIMESTAMP(3),
+    "disconnected_at" TIMESTAMP(3),
 
     CONSTRAINT "zapify_integration_pkey" PRIMARY KEY ("id")
 );
+
+CREATE UNIQUE INDEX "zapify_integration_instance_key_key" ON "zapify_integration"("instance_key");
 
 CREATE TABLE "clients" (
     "id" UUID NOT NULL,
@@ -59,17 +62,6 @@ CREATE TABLE "phone_client" (
     CONSTRAINT "phone_client_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "monitored_contacts" (
-    "id" UUID NOT NULL,
-    "user_id" UUID NOT NULL,
-    "client_id" UUID NOT NULL,
-    "phone_jid" TEXT NOT NULL,
-    "is_active" BOOLEAN,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "monitored_contacts_pkey" PRIMARY KEY ("id")
-);
 
 CREATE TABLE "pix_receipts" (
     "id" UUID NOT NULL,
@@ -167,10 +159,6 @@ ALTER TABLE "zapify_integration" ADD CONSTRAINT "zapify_integration_user_id_fkey
 ALTER TABLE "clients" ADD CONSTRAINT "clients_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "phone_client" ADD CONSTRAINT "phone_client_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "monitored_contacts" ADD CONSTRAINT "monitored_contacts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "monitored_contacts" ADD CONSTRAINT "monitored_contacts_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "pix_receipts" ADD CONSTRAINT "pix_receipts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
