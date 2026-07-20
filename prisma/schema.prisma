@@ -27,7 +27,6 @@ model User {
 
   zapifyIntegrations     ZapifyIntegration[]
   clients                Client[]
-  monitoredContacts      MonitoredContact[]
   pixReceipts            PixReceipt[]
   accountsReceivable     AccountReceivable[]
   passwordResetTokens    PasswordResetToken[]
@@ -51,10 +50,11 @@ model PasswordResetToken {
 model ZapifyIntegration {
   id             String   @id @default(uuid()) @db.Uuid
   userId         String   @map("user_id") @db.Uuid
-  active         Boolean?
-  instanceApiUrl String?  @map("instance_api_url")
-  instanceKey    String?  @map("instance_key")
-  instanceToken  String?  @map("instance_token")
+  active         Boolean  @default(false)
+  instanceKey    String   @unique @map("instance_key")
+  instanceToken  String   @map("instance_token")
+  connectedAt    DateTime? @map("connected_at")
+  disconnectedAt DateTime? @map("disconnected_at")
 
   user User @relation(fields: [userId], references: [id])
 
@@ -79,7 +79,6 @@ model Client {
 
   user               User               @relation(fields: [userId], references: [id])
   phoneClients       PhoneClient[]
-  monitoredContacts  MonitoredContact[]
   pixReceipts        PixReceipt[]
   warnings           Warning[]
   accountsReceivable AccountReceivable[]
@@ -98,20 +97,6 @@ model PhoneClient {
   @@map("phone_client")
 }
 
-model MonitoredContact {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  clientId  String   @map("client_id") @db.Uuid
-  phoneJid  String   @map("phone_jid")
-  isActive  Boolean? @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  user   User   @relation(fields: [userId], references: [id])
-  client Client @relation(fields: [clientId], references: [id])
-
-  @@map("monitored_contacts")
-}
 
 model PixReceipt {
   id                             String    @id @default(uuid()) @db.Uuid

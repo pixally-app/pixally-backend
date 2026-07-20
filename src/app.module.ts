@@ -7,9 +7,10 @@ import { AuthModule } from './auth/auth.module.js';
 import { ClientsModule } from './clients/clients.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { UsersModule } from './users/users.module.js';
+import { ZapfyModule } from './zapfy/zapfy.module.js';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, ClientsModule, AccountsReceivableModule, UsersModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, ClientsModule, AccountsReceivableModule, UsersModule, ZapfyModule],
   controllers: [AppController],
   providers: [AppService],
 })
