@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PixReceiptsService } from '../pix-receipts/pix-receipts.service.js';
 import { ZapfyClient } from './zapfy.client.js';
 import type { ConnectIntegrationDto } from './dto/connect-integration.dto.js';
 import type {
@@ -15,6 +16,7 @@ export class ZapfyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly zapfyClient: ZapfyClient,
+    private readonly pixReceiptsService: PixReceiptsService,
   ) {}
 
   async connectInstance(userId: string, dto: ConnectIntegrationDto) {
@@ -190,8 +192,9 @@ export class ZapfyService {
       data: {
         userId: integration.userId,
         clientId: phoneClient?.clientId ?? null,
-        status: 'PENDING',
+        status: 'ANALYSING',
         origin: 'whatsapp',
+        documentFormat: media.mimetype === 'application/pdf' ? 'pdf' : 'image',
         jid: phoneNumber,
         messageId: key.id,
       },
@@ -204,6 +207,8 @@ export class ZapfyService {
         mimeType: media.mimetype,
       },
     });
+
+    await this.pixReceiptsService.processFromWebhook(receipt.id, media.url, media.mimetype);
   }
 
   private async handleMessageUpdated(payload: ZapfyMessageUpdatedPayload) {
