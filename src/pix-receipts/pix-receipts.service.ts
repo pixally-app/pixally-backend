@@ -163,11 +163,15 @@ export class PixReceiptsService {
 
       const status = hasRedFlag ? 'RED_FLAG' : hasYellowFlag ? 'YELLOW_FLAG' : 'RECEIVED';
 
-      let depositAmount = null;
-      if (data.valor) {
-        const cleaned = data.valor.replace(/[R$\s.]/g, '').replace(',', '.');
-        const parsed = parseFloat(cleaned);
-        if (!isNaN(parsed)) depositAmount = parsed;
+      const amountFromGpt = this.parseAmount(data.valor);
+      const amountFromOcr = this.extractAmountFromOcr(ocrText);
+
+      let depositAmount: number | null = amountFromGpt;
+      if (amountFromOcr !== null && amountFromGpt !== null && Math.abs(amountFromOcr - amountFromGpt) > 0.01) {
+        this.logger.warn(`Valor do GPT (${amountFromGpt}) divergiu do OCR (${amountFromOcr}) — usando OCR`);
+        depositAmount = amountFromOcr;
+      } else if (amountFromOcr !== null && amountFromGpt === null) {
+        depositAmount = amountFromOcr;
       }
 
       await this.prisma.pixReceipt.update({
@@ -231,6 +235,26 @@ export class PixReceiptsService {
       }
     }
     return '';
+  }
+
+  private extractAmountFromOcr(ocrText: string): number | null {
+    const match = ocrText.match(/R\$\s?[0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})/);
+    if (!match) return null;
+    return this.parseAmount(match[0]);
+  }
+
+  private parseAmount(value: string | null | undefined): number | null {
+    if (!value) return null;
+    const cleaned = value.replace('R$', '').replace(/\s/g, '');
+    let normalized: string;
+    if (cleaned.includes(',') && cleaned.includes('.')) {
+      const [intPart, decPart] = cleaned.split(',');
+      normalized = intPart.replace(/\./g, '') + '.' + decPart;
+    } else {
+      normalized = cleaned.replace(',', '.');
+    }
+    const parsed = parseFloat(normalized);
+    return isNaN(parsed) ? null : parsed;
   }
 
   async findAll(
