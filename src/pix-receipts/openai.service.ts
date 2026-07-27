@@ -6,6 +6,7 @@ export interface ReceiptData {
   id_transferencia: string;
   data_hora: string;
   valor: string;
+  descricao: string;
   destino_nome: string;
   destino_documento: string;
   destino_tipo_documento: string;
@@ -57,6 +58,7 @@ O formato final do JSON deve ser:
     "id_transferencia": "",
     "data_hora": "",
     "valor": "",
+    "descricao": "",
     "destino_nome": "",
     "destino_documento": "",
     "destino_tipo_documento": "",
@@ -75,6 +77,7 @@ O formato final do JSON deve ser:
 
 IMPORTANTE:
 - A data/hora deve estar sempre no formato ISO "YYYY-MM-DDTHH:mm:ss"
+- O campo "descricao" deve conter a mensagem ou descrição informada pelo pagador. Ela pode aparecer com rótulos variados ("Descrição", "Mensagem", "Referência", "Motivo") ou sem nenhum rótulo — neste caso costuma ser um texto curto logo abaixo do valor ou da data. Se não houver descrição, deixe vazio.
 - O JSON deve ser válido, sem comentários e sem chaves duplicadas
 - Se não conseguir processar, responda apenas com: { "error": "mensagem aqui" }
 - Seja sucinto, envie apenas o JSON`;

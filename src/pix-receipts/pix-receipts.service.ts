@@ -194,6 +194,7 @@ export class PixReceiptsService {
           depositDestinationBank: data.destino_instituicao_bancaria || null,
           depositDestinationAgency: data.destino_agencia || null,
           depositDestinationAccount: data.destino_conta || null,
+          description: data.descricao || null,
         },
       });
 
@@ -229,10 +230,8 @@ export class PixReceiptsService {
   private extractPixIdFromOcr(ocrText: string): string {
     const lines = ocrText.split('\n');
     for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('E') && trimmed.length === 32) {
-        return trimmed;
-      }
+      const match = line.match(/E[A-Za-z0-9]{31}/);
+      if (match) return match[0];
     }
     return '';
   }
