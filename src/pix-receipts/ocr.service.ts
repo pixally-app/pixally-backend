@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as mupdf from 'mupdf';
 import Tesseract from 'tesseract.js';
 
 @Injectable()
@@ -16,5 +17,21 @@ export class OcrService {
     this.logger.log(`OCR concluído — ${text.length} caracteres extraídos`);
 
     return text;
+  }
+
+  async pdfToJpeg(pdfUrl: string): Promise<Buffer> {
+    this.logger.log(`Convertendo PDF para JPEG: ${pdfUrl}`);
+
+    const res = await fetch(pdfUrl);
+    const buffer = Buffer.from(await res.arrayBuffer());
+
+    const doc = mupdf.Document.openDocument(buffer, 'application/pdf');
+    const page = doc.loadPage(0);
+    const pixmap = page.toPixmap(mupdf.Matrix.identity, mupdf.ColorSpace.DeviceRGB, false, true);
+    const jpeg = Buffer.from(pixmap.asJPEG(90));
+
+    this.logger.log(`PDF convertido — ${jpeg.length} bytes`);
+
+    return jpeg;
   }
 }

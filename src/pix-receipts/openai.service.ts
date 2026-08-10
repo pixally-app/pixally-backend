@@ -35,20 +35,8 @@ export class OpenAiService {
     });
   }
 
-  async analyzeReceipt(fileUrl: string, ocrText: string, mimeType = 'image/jpeg'): Promise<ReceiptData> {
+  async analyzeReceipt(fileUrl: string, ocrText: string): Promise<ReceiptData> {
     this.logger.log('Enviando comprovante para o GPT-4o');
-
-    const isPdf = mimeType === 'application/pdf';
-    let fileContent: string;
-
-    if (isPdf) {
-      const res = await fetch(fileUrl);
-      const buffer = await res.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      fileContent = `data:application/pdf;base64,${base64}`;
-    } else {
-      fileContent = fileUrl;
-    }
 
     const prompt = `Dado este comprovante de transferência bancária e sua respectiva extração de OCR (texto), o seu trabalho é cruzar as duas fontes de informação para extrair os dados com a melhor precisão possível em um formato JSON sem níveis de aninhamento.
 
@@ -89,7 +77,7 @@ IMPORTANTE:
           role: 'user',
           content: [
             { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: fileContent } },
+            { type: 'image_url', image_url: { url: fileUrl } },
             { type: 'text', text: `Aqui está a extração do OCR:\n${ocrText}` },
           ],
         },
@@ -108,6 +96,11 @@ IMPORTANTE:
       .replace(/```/g, '')
       .trim();
 
-    return JSON.parse(cleaned) as ReceiptData;
+    try {
+      return JSON.parse(cleaned) as ReceiptData;
+    } catch {
+      this.logger.error(`GPT retornou resposta não-JSON: ${cleaned.slice(0, 200)}`);
+      return { error: 'Resposta inválida do GPT' } as ReceiptData;
+    }
   }
 }

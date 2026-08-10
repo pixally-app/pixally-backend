@@ -5,6 +5,8 @@ import { OcrService } from './ocr.service.js';
 import { OpenAiService } from './openai.service.js';
 import { StorageService } from './storage.service.js';
 
+type ReceiptWarning = { type: string; message: string };
+
 @Injectable()
 export class PixReceiptsService {
   private readonly logger = new Logger(PixReceiptsService.name);
@@ -64,11 +66,20 @@ export class PixReceiptsService {
         where: { id: receiptId },
       });
 
-      const ocrText = mimeType !== 'application/pdf'
-        ? await this.ocr.extractText(imageUrl)
-        : '';
+      if (mimeType === 'application/pdf') {
+        const jpegBuffer = await this.ocr.pdfToJpeg(imageUrl);
+        const jpegUrl = await this.storage.upload(jpegBuffer, 'image/jpeg');
+        await this.prisma.pixReceiptBlob.updateMany({
+          where: { pixReceiptsId: receiptId },
+          data: { fileUrl: jpegUrl, mimeType: 'image/jpeg' },
+        });
+        imageUrl = jpegUrl;
+        mimeType = 'image/jpeg';
+      }
 
-      const data = await this.openai.analyzeReceipt(imageUrl, ocrText, mimeType);
+      const ocrText = await this.ocr.extractText(imageUrl);
+
+      const data = await this.openai.analyzeReceipt(imageUrl, ocrText);
 
       if (data.error) {
         await this.prisma.pixReceipt.update({
@@ -86,7 +97,7 @@ export class PixReceiptsService {
         return;
       }
 
-      const warnings: { type: string; message: string }[] = [];
+      const warnings: ReceiptWarning[] = [];
 
       const pixIdFromGpt = data.id_transferencia?.trim() ?? '';
       const pixIdFromOcr = this.extractPixIdFromOcr(ocrText);
@@ -154,7 +165,23 @@ export class PixReceiptsService {
         }
       }
 
-      if (!receipt?.clientId) {
+      let resolvedClientId = receipt?.clientId ?? null;
+
+      if (!resolvedClientId) {
+        if (receipt?.jid) {
+          const byPhone = await this.prisma.phoneClient.findFirst({
+            where: {
+              phoneNumber: { endsWith: receipt.jid.slice(-8) },
+              client: { userId: receipt.userId, deletedAt: null },
+            },
+            select: { clientId: true },
+          });
+          resolvedClientId = byPhone?.clientId ?? null;
+        }
+
+      }
+
+      if (!resolvedClientId) {
         warnings.push({ type: 'yellow', message: 'Nenhum cliente vinculado a este comprovante' });
       }
 
@@ -178,6 +205,7 @@ export class PixReceiptsService {
         where: { id: receiptId },
         data: {
           status,
+          clientId: resolvedClientId,
           processmentOcrOutcome: ocrText,
           pixTransactionId: pixId || null,
           depositDateTime,
@@ -202,7 +230,7 @@ export class PixReceiptsService {
         await this.prisma.warning.createMany({
           data: warnings.map((w) => ({
             pixReceiptId: receiptId,
-            clientId: receipt?.clientId ?? null,
+            clientId: resolvedClientId,
             type: w.type,
             message: w.message,
           })),
