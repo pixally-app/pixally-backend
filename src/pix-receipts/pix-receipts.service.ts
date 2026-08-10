@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { PixReceiptModel } from '../../generated/prisma/models/PixReceipt.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { UpdateReceiptDto } from './dto/update-receipt.dto.js';
 import { OcrService } from './ocr.service.js';
 import { OpenAiService } from './openai.service.js';
 import { StorageService } from './storage.service.js';
@@ -342,16 +343,44 @@ export class PixReceiptsService {
     return receipt;
   }
 
-  async update(userId: string, id: string, data: { clientId?: string; status?: string; description?: string }) {
+  async update(userId: string, id: string, data: UpdateReceiptDto) {
     const receipt = await this.prisma.pixReceipt.findFirst({
       where: { id, userId },
     });
 
     if (!receipt) throw new NotFoundException('Receipt not found');
 
+    const depositDateTime =
+      data.depositDateTime !== undefined
+        ? data.depositDateTime
+          ? new Date(data.depositDateTime)
+          : null
+        : undefined;
+
     return this.prisma.pixReceipt.update({
       where: { id },
-      data,
+      data: {
+        ...(data.clientId !== undefined && { clientId: data.clientId }),
+        ...(data.status !== undefined && { status: data.status }),
+        ...(data.pixTransactionId !== undefined && { pixTransactionId: data.pixTransactionId || null }),
+        ...(data.description !== undefined && { description: data.description || null }),
+        ...(data.depositAmount !== undefined && { depositAmount: data.depositAmount }),
+        ...(depositDateTime !== undefined && { depositDateTime }),
+        ...(data.depositOriginName !== undefined && { depositOriginName: data.depositOriginName || null }),
+        ...(data.depositOriginDocument !== undefined && { depositOriginDocument: data.depositOriginDocument || null }),
+        ...(data.depositOriginBank !== undefined && { depositOriginBank: data.depositOriginBank || null }),
+        ...(data.depositOriginAgency !== undefined && { depositOriginAgency: data.depositOriginAgency || null }),
+        ...(data.depositOriginAccount !== undefined && { depositOriginAccount: data.depositOriginAccount || null }),
+        ...(data.depositDestinationName !== undefined && { depositDestinationName: data.depositDestinationName || null }),
+        ...(data.depositDestinationDocument !== undefined && { depositDestinationDocument: data.depositDestinationDocument || null }),
+        ...(data.depositDestinationBank !== undefined && { depositDestinationBank: data.depositDestinationBank || null }),
+        ...(data.depositDestinationAccount !== undefined && { depositDestinationAccount: data.depositDestinationAccount || null }),
+      },
+      include: {
+        blob: true,
+        warnings: true,
+        client: true,
+      },
     });
   }
 
