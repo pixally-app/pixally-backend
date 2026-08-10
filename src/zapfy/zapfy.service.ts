@@ -177,9 +177,9 @@ export class ZapfyService {
     });
     if (!integration) return;
 
-    const phoneNumber = key.remoteJid.split('@')[0];
+    const rawJid = key.jid ?? key.senderPn ?? key.remoteJid;
+    const phoneNumber = rawJid.split('@')[0];
 
-    // try to link to a client by registered phone number
     const phoneClient = await this.prisma.phoneClient.findFirst({
       where: {
         phoneNumber: { endsWith: phoneNumber.slice(-8) },
