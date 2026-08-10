@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
@@ -17,6 +18,7 @@ import { memoryStorage } from 'multer';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import type { AuthenticatedUser } from '../auth/jwt.strategy.js';
+import { UpdateReceiptDto } from './dto/update-receipt.dto.js';
 import { PixReceiptsService } from './pix-receipts.service.js';
 
 @ApiTags('Pix Receipts')
@@ -88,8 +90,9 @@ export class PixReceiptsController {
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
+    @Body() body: UpdateReceiptDto,
   ) {
-    return this.pixReceiptsService.update(user.userId, id, {});
+    return this.pixReceiptsService.update(user.userId, id, body);
   }
 
   @Delete(':id')
