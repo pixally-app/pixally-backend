@@ -53,6 +53,11 @@ export class UpdateReceiptDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  depositOriginDocumentType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   depositOriginBank?: string;
 
   @ApiPropertyOptional()
@@ -78,7 +83,17 @@ export class UpdateReceiptDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  depositDestinationDocumentType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   depositDestinationBank?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  depositDestinationAgency?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

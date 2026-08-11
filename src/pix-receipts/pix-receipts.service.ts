@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { PixReceiptModel } from '../../generated/prisma/models/PixReceipt.js';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import type { PixReceiptModel, PixReceiptWhereInput } from '../../generated/prisma/models/PixReceipt.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpdateReceiptDto } from './dto/update-receipt.dto.js';
 import { OcrService } from './ocr.service.js';
@@ -179,7 +179,6 @@ export class PixReceiptsService {
           });
           resolvedClientId = byPhone?.clientId ?? null;
         }
-
       }
 
       if (!resolvedClientId) {
@@ -293,12 +292,12 @@ export class PixReceiptsService {
   ) {
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = { userId };
+    const where: PixReceiptWhereInput = { userId };
 
-    if (filters.status) where['status'] = filters.status;
-    if (filters.origin) where['origin'] = filters.origin;
+    if (filters.status) where.status = filters.status;
+    if (filters.origin) where.origin = filters.origin;
     if (filters.clientName) {
-      where['client'] = {
+      where.client = {
         name: { contains: filters.clientName, mode: 'insensitive' },
         deletedAt: null,
       };
@@ -335,12 +334,152 @@ export class PixReceiptsService {
         blob: true,
         warnings: true,
         client: true,
+        accountsReceivable: true,
       },
     });
 
-    if (!receipt) throw new NotFoundException('Receipt not found');
+    if (!receipt) throw new NotFoundException('Comprovante não encontrado');
 
     return receipt;
+  }
+
+  async reconcile(userId: string, receiptId: string, accountReceivableId: string) {
+    const receipt = await this.prisma.pixReceipt.findFirst({
+      where: { id: receiptId, userId },
+    });
+
+    if (!receipt) throw new NotFoundException('Comprovante não encontrado');
+
+    const accountReceivable = await this.prisma.accountReceivable.findFirst({
+      where: { id: accountReceivableId, userId },
+    });
+
+    if (!accountReceivable) throw new NotFoundException('Conta a receber não encontrada');
+
+    if (accountReceivable.status === 'CANCELLED') {
+      throw new BadRequestException('Não é possível conciliar com uma conta cancelada');
+    }
+
+    if (accountReceivable.pixReceiptId && accountReceivable.pixReceiptId !== receiptId) {
+      throw new ConflictException('Esta conta a receber já possui outro comprovante vinculado');
+    }
+
+    const previousAR = await this.prisma.accountReceivable.findFirst({
+      where: { pixReceiptId: receiptId, userId, id: { not: accountReceivableId } },
+    });
+
+    const installments = await this.prisma.installment.findMany({
+      where: { accountReceivableId },
+      orderBy: { installmentNumber: 'asc' },
+    });
+
+    const receiptAmount = receipt.depositAmount ? Number(receipt.depositAmount) : null;
+    const accountTotal = Number(accountReceivable.totalAmount);
+    const coversFullAmount = receiptAmount !== null && receiptAmount >= accountTotal;
+
+    const matchingInstallment =
+      receiptAmount !== null && !coversFullAmount
+        ? (installments.find((i) => !i.paidAt && Math.abs(Number(i.amount) - receiptAmount) < 0.01) ?? null)
+        : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+
+      if (previousAR) {
+        await tx.accountReceivable.update({
+          where: { id: previousAR.id },
+          data: { pixReceiptId: null, status: 'PENDING', paidAt: null, matchedAutomatically: null },
+        });
+        await tx.installment.updateMany({
+          where: { accountReceivableId: previousAR.id },
+          data: { paidAt: null },
+        });
+      }
+
+      let accountStatus = 'PENDING';
+      let accountPaidAt: Date | null = null;
+
+      if (coversFullAmount) {
+        await tx.installment.updateMany({
+          where: { accountReceivableId, paidAt: null },
+          data: { paidAt: now },
+        });
+        accountStatus = 'PAID';
+        accountPaidAt = now;
+      } else if (matchingInstallment) {
+        await tx.installment.update({
+          where: { id: matchingInstallment.id },
+          data: { paidAt: now },
+        });
+        const remainingUnpaid = installments.filter((i) => i.id !== matchingInstallment.id && !i.paidAt);
+        if (remainingUnpaid.length === 0) {
+          accountStatus = 'PAID';
+          accountPaidAt = now;
+        }
+      }
+
+      await tx.accountReceivable.update({
+        where: { id: accountReceivableId },
+        data: { pixReceiptId: receiptId, matchedAutomatically: false, status: accountStatus, paidAt: accountPaidAt },
+      });
+      await tx.pixReceipt.update({
+        where: { id: receiptId },
+        data: { status: 'RECONCILED', clientId: accountReceivable.clientId },
+      });
+    });
+
+    return this.prisma.pixReceipt.findFirst({
+      where: { id: receiptId },
+      include: {
+        blob: true,
+        warnings: true,
+        client: true,
+        accountsReceivable: true,
+      },
+    });
+  }
+
+  async unreconcile(userId: string, receiptId: string) {
+    const receipt = await this.prisma.pixReceipt.findFirst({
+      where: { id: receiptId, userId },
+      include: { warnings: true },
+    });
+
+    if (!receipt) throw new NotFoundException('Comprovante não encontrado');
+
+    if (!receipt.clientId && receipt.status !== 'RECONCILED') {
+      throw new BadRequestException('Comprovante não possui vínculo para desfazer');
+    }
+
+    const linkedAR = await this.prisma.accountReceivable.findFirst({
+      where: { pixReceiptId: receiptId, userId },
+    });
+
+    const hasRed = receipt.warnings.some((w) => w.type === 'red' && !w.resolved);
+    const hasYellow = receipt.warnings.some((w) => w.type === 'yellow' && !w.resolved);
+    const restoredStatus = hasRed ? 'RED_FLAG' : hasYellow ? 'YELLOW_FLAG' : 'RECEIVED';
+
+    await this.prisma.$transaction(async (tx) => {
+      if (linkedAR) {
+        await tx.accountReceivable.update({
+          where: { id: linkedAR.id },
+          data: { pixReceiptId: null, status: 'PENDING', paidAt: null, matchedAutomatically: null },
+        });
+        await tx.installment.updateMany({
+          where: { accountReceivableId: linkedAR.id },
+          data: { paidAt: null },
+        });
+      }
+      await tx.pixReceipt.update({
+        where: { id: receiptId },
+        data: { clientId: null, status: restoredStatus },
+      });
+    });
+
+    return this.prisma.pixReceipt.findFirst({
+      where: { id: receiptId },
+      include: { blob: true, warnings: true, client: true, accountsReceivable: true },
+    });
   }
 
   async update(userId: string, id: string, data: UpdateReceiptDto) {
@@ -348,7 +487,7 @@ export class PixReceiptsService {
       where: { id, userId },
     });
 
-    if (!receipt) throw new NotFoundException('Receipt not found');
+    if (!receipt) throw new NotFoundException('Comprovante não encontrado');
 
     const depositDateTime =
       data.depositDateTime !== undefined
@@ -368,18 +507,22 @@ export class PixReceiptsService {
         ...(depositDateTime !== undefined && { depositDateTime }),
         ...(data.depositOriginName !== undefined && { depositOriginName: data.depositOriginName || null }),
         ...(data.depositOriginDocument !== undefined && { depositOriginDocument: data.depositOriginDocument || null }),
+        ...(data.depositOriginDocumentType !== undefined && { depositOriginDocumentType: data.depositOriginDocumentType || null }),
         ...(data.depositOriginBank !== undefined && { depositOriginBank: data.depositOriginBank || null }),
         ...(data.depositOriginAgency !== undefined && { depositOriginAgency: data.depositOriginAgency || null }),
         ...(data.depositOriginAccount !== undefined && { depositOriginAccount: data.depositOriginAccount || null }),
         ...(data.depositDestinationName !== undefined && { depositDestinationName: data.depositDestinationName || null }),
         ...(data.depositDestinationDocument !== undefined && { depositDestinationDocument: data.depositDestinationDocument || null }),
+        ...(data.depositDestinationDocumentType !== undefined && { depositDestinationDocumentType: data.depositDestinationDocumentType || null }),
         ...(data.depositDestinationBank !== undefined && { depositDestinationBank: data.depositDestinationBank || null }),
+        ...(data.depositDestinationAgency !== undefined && { depositDestinationAgency: data.depositDestinationAgency || null }),
         ...(data.depositDestinationAccount !== undefined && { depositDestinationAccount: data.depositDestinationAccount || null }),
       },
       include: {
         blob: true,
         warnings: true,
         client: true,
+        accountsReceivable: true,
       },
     });
   }
@@ -389,14 +532,16 @@ export class PixReceiptsService {
       where: { id, userId },
     });
 
-    if (!receipt) throw new NotFoundException('Receipt not found');
+    if (!receipt) throw new NotFoundException('Comprovante não encontrado');
 
     if (receipt.status === 'ANALYSING') {
       throw new BadRequestException('Não é possível deletar um comprovante que ainda está sendo analisado');
     }
 
-    await this.prisma.pixReceiptBlob.deleteMany({ where: { pixReceiptsId: id } });
-    await this.prisma.warning.deleteMany({ where: { pixReceiptId: id } });
-    await this.prisma.pixReceipt.delete({ where: { id } });
+    await this.prisma.$transaction([
+      this.prisma.pixReceiptBlob.deleteMany({ where: { pixReceiptsId: id } }),
+      this.prisma.warning.deleteMany({ where: { pixReceiptId: id } }),
+      this.prisma.pixReceipt.delete({ where: { id } }),
+    ]);
   }
 }

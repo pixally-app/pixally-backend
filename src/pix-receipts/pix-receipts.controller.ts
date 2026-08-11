@@ -18,6 +18,7 @@ import { memoryStorage } from 'multer';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import type { AuthenticatedUser } from '../auth/jwt.strategy.js';
+import { ReconcileReceiptDto } from './dto/reconcile-receipt.dto.js';
 import { UpdateReceiptDto } from './dto/update-receipt.dto.js';
 import { PixReceiptsService } from './pix-receipts.service.js';
 
@@ -93,6 +94,34 @@ export class PixReceiptsController {
     @Body() body: UpdateReceiptDto,
   ) {
     return this.pixReceiptsService.update(user.userId, id, body);
+  }
+
+  @Patch(':id/reconcile')
+  @ApiOperation({ summary: 'Conciliar comprovante com uma conta a receber' })
+  @ApiResponse({ status: 200, description: 'Comprovante conciliado com sucesso' })
+  @ApiResponse({ status: 400, description: 'Conta cancelada' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Comprovante ou conta a receber não encontrados' })
+  @ApiResponse({ status: 409, description: 'Comprovante ou conta já conciliados' })
+  reconcile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: ReconcileReceiptDto,
+  ) {
+    return this.pixReceiptsService.reconcile(user.userId, id, body.accountReceivableId);
+  }
+
+  @Patch(':id/unreconcile')
+  @ApiOperation({ summary: 'Desvincular comprovante da conta a receber' })
+  @ApiResponse({ status: 200, description: 'Comprovante desvinculado, conta volta a PENDING' })
+  @ApiResponse({ status: 400, description: 'Comprovante não está conciliado' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Comprovante não encontrado' })
+  unreconcile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.pixReceiptsService.unreconcile(user.userId, id);
   }
 
   @Delete(':id')
