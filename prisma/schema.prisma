@@ -128,11 +128,15 @@ model PixReceipt {
   createdAt                      DateTime  @default(now()) @map("created_at")
   updatedAt                      DateTime  @updatedAt @map("updated_at")
 
-  user               User              @relation(fields: [userId], references: [id])
-  client             Client?           @relation(fields: [clientId], references: [id])
-  blob               PixReceiptBlob[]
-  warnings           Warning[]
-  accountsReceivable AccountReceivable[]
+  accountReceivableId String?   @map("account_receivable_id") @db.Uuid
+  installmentId       String?   @map("installment_id") @db.Uuid
+
+  user              User               @relation(fields: [userId], references: [id])
+  client            Client?            @relation(fields: [clientId], references: [id])
+  accountReceivable AccountReceivable? @relation(fields: [accountReceivableId], references: [id])
+  installment       Installment?       @relation(fields: [installmentId], references: [id])
+  blob              PixReceiptBlob[]
+  warnings          Warning[]
 
   @@map("pix_receipts")
 }
@@ -170,10 +174,9 @@ model Warning {
 model AccountReceivable {
   id                   String    @id @default(uuid()) @db.Uuid
   userId               String    @map("user_id") @db.Uuid
-  pixReceiptId         String?   @map("pix_receipt_id") @db.Uuid
   clientId             String    @map("client_id") @db.Uuid
-  clientName           String   @map("client_name")
-  serviceName          String   @map("service_name")
+  clientName           String    @map("client_name")
+  serviceName          String    @map("service_name")
   serviceDescription   String?   @map("service_description")
   totalAmount          Decimal   @map("total_amount") @db.Decimal
   dueDate              DateTime  @map("due_date") @db.Date
@@ -185,8 +188,8 @@ model AccountReceivable {
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
   user         User          @relation(fields: [userId], references: [id])
-  pixReceipt   PixReceipt?   @relation(fields: [pixReceiptId], references: [id])
   client       Client        @relation(fields: [clientId], references: [id])
+  receipts     PixReceipt[]
   installments Installment[]
 
   @@map("accounts_receivable")
@@ -203,6 +206,7 @@ model Installment {
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
   accountReceivable AccountReceivable @relation(fields: [accountReceivableId], references: [id], onDelete: Cascade)
+  receipts          PixReceipt[]
 
   @@map("installments")
 }

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { PixReceiptModel, PixReceiptWhereInput } from '../../generated/prisma/models/PixReceipt.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpdateReceiptDto } from './dto/update-receipt.dto.js';
@@ -334,7 +334,9 @@ export class PixReceiptsService {
         blob: true,
         warnings: true,
         client: true,
-        accountsReceivable: true,
+        accountReceivable: {
+          include: { installments: { orderBy: { installmentNumber: 'asc' } } },
+        },
       },
     });
 
@@ -360,14 +362,6 @@ export class PixReceiptsService {
       throw new BadRequestException('Não é possível conciliar com uma conta cancelada');
     }
 
-    if (accountReceivable.pixReceiptId && accountReceivable.pixReceiptId !== receiptId) {
-      throw new ConflictException('Esta conta a receber já possui outro comprovante vinculado');
-    }
-
-    const previousAR = await this.prisma.accountReceivable.findFirst({
-      where: { pixReceiptId: receiptId, userId, id: { not: accountReceivableId } },
-    });
-
     const installments = await this.prisma.installment.findMany({
       where: { accountReceivableId },
       orderBy: { installmentNumber: 'asc' },
@@ -385,46 +379,70 @@ export class PixReceiptsService {
     await this.prisma.$transaction(async (tx) => {
       const now = new Date();
 
-      if (previousAR) {
+      if (receipt.accountReceivableId && receipt.accountReceivableId !== accountReceivableId) {
+        const prevAccountId = receipt.accountReceivableId;
+
+        if (receipt.installmentId) {
+          await tx.installment.update({
+            where: { id: receipt.installmentId },
+            data: { paidAt: null },
+          });
+        } else {
+          const otherReceipts = await tx.pixReceipt.findMany({
+            where: { accountReceivableId: prevAccountId, id: { not: receiptId } },
+            select: { installmentId: true },
+          });
+          const protectedIds = otherReceipts.map((r) => r.installmentId).filter(Boolean) as string[];
+          await tx.installment.updateMany({
+            where: {
+              accountReceivableId: prevAccountId,
+              paidAt: { not: null },
+              ...(protectedIds.length > 0 && { id: { notIn: protectedIds } }),
+            },
+            data: { paidAt: null },
+          });
+        }
+
+        const prevInstallments = await tx.installment.findMany({ where: { accountReceivableId: prevAccountId } });
+        const prevAllPaid = prevInstallments.length > 0 && prevInstallments.every((i) => i.paidAt !== null);
         await tx.accountReceivable.update({
-          where: { id: previousAR.id },
-          data: { pixReceiptId: null, status: 'PENDING', paidAt: null, matchedAutomatically: null },
-        });
-        await tx.installment.updateMany({
-          where: { accountReceivableId: previousAR.id },
-          data: { paidAt: null },
+          where: { id: prevAccountId },
+          data: { status: prevAllPaid ? 'PAID' : 'PENDING', paidAt: prevAllPaid ? now : null },
         });
       }
 
-      let accountStatus = 'PENDING';
-      let accountPaidAt: Date | null = null;
+      let newInstallmentId: string | null = null;
 
       if (coversFullAmount) {
         await tx.installment.updateMany({
           where: { accountReceivableId, paidAt: null },
           data: { paidAt: now },
         });
-        accountStatus = 'PAID';
-        accountPaidAt = now;
       } else if (matchingInstallment) {
         await tx.installment.update({
           where: { id: matchingInstallment.id },
           data: { paidAt: now },
         });
-        const remainingUnpaid = installments.filter((i) => i.id !== matchingInstallment.id && !i.paidAt);
-        if (remainingUnpaid.length === 0) {
-          accountStatus = 'PAID';
-          accountPaidAt = now;
-        }
+        newInstallmentId = matchingInstallment.id;
       }
+
+      const freshInstallments = await tx.installment.findMany({ where: { accountReceivableId } });
+      const allPaid = freshInstallments.length > 0 && freshInstallments.every((i) => i.paidAt !== null);
+      const isPaid = freshInstallments.length === 0 ? coversFullAmount : allPaid;
 
       await tx.accountReceivable.update({
         where: { id: accountReceivableId },
-        data: { pixReceiptId: receiptId, matchedAutomatically: false, status: accountStatus, paidAt: accountPaidAt },
+        data: { status: isPaid ? 'PAID' : 'PENDING', paidAt: isPaid ? now : null, matchedAutomatically: false },
       });
+
       await tx.pixReceipt.update({
         where: { id: receiptId },
-        data: { status: 'RECONCILED', clientId: accountReceivable.clientId },
+        data: {
+          status: 'RECONCILED',
+          clientId: accountReceivable.clientId,
+          accountReceivableId,
+          installmentId: newInstallmentId,
+        },
       });
     });
 
@@ -434,7 +452,9 @@ export class PixReceiptsService {
         blob: true,
         warnings: true,
         client: true,
-        accountsReceivable: true,
+        accountReceivable: {
+          include: { installments: { orderBy: { installmentNumber: 'asc' } } },
+        },
       },
     });
   }
@@ -447,38 +467,63 @@ export class PixReceiptsService {
 
     if (!receipt) throw new NotFoundException('Comprovante não encontrado');
 
-    if (!receipt.clientId && receipt.status !== 'RECONCILED') {
+    if (!receipt.clientId && !receipt.accountReceivableId && receipt.status !== 'RECONCILED') {
       throw new BadRequestException('Comprovante não possui vínculo para desfazer');
     }
-
-    const linkedAR = await this.prisma.accountReceivable.findFirst({
-      where: { pixReceiptId: receiptId, userId },
-    });
 
     const hasRed = receipt.warnings.some((w) => w.type === 'red' && !w.resolved);
     const hasYellow = receipt.warnings.some((w) => w.type === 'yellow' && !w.resolved);
     const restoredStatus = hasRed ? 'RED_FLAG' : hasYellow ? 'YELLOW_FLAG' : 'RECEIVED';
 
     await this.prisma.$transaction(async (tx) => {
-      if (linkedAR) {
+      const now = new Date();
+
+      if (receipt.accountReceivableId) {
+        if (receipt.installmentId) {
+          await tx.installment.update({
+            where: { id: receipt.installmentId },
+            data: { paidAt: null },
+          });
+        } else {
+          const otherReceipts = await tx.pixReceipt.findMany({
+            where: { accountReceivableId: receipt.accountReceivableId, id: { not: receiptId } },
+            select: { installmentId: true },
+          });
+          const protectedIds = otherReceipts.map((r) => r.installmentId).filter(Boolean) as string[];
+          await tx.installment.updateMany({
+            where: {
+              accountReceivableId: receipt.accountReceivableId,
+              paidAt: { not: null },
+              ...(protectedIds.length > 0 && { id: { notIn: protectedIds } }),
+            },
+            data: { paidAt: null },
+          });
+        }
+
+        const remaining = await tx.installment.findMany({ where: { accountReceivableId: receipt.accountReceivableId } });
+        const allPaid = remaining.length > 0 && remaining.every((i) => i.paidAt !== null);
         await tx.accountReceivable.update({
-          where: { id: linkedAR.id },
-          data: { pixReceiptId: null, status: 'PENDING', paidAt: null, matchedAutomatically: null },
-        });
-        await tx.installment.updateMany({
-          where: { accountReceivableId: linkedAR.id },
-          data: { paidAt: null },
+          where: { id: receipt.accountReceivableId },
+          data: { status: allPaid ? 'PAID' : 'PENDING', paidAt: allPaid ? now : null },
         });
       }
+
       await tx.pixReceipt.update({
         where: { id: receiptId },
-        data: { clientId: null, status: restoredStatus },
+        data: { clientId: null, accountReceivableId: null, installmentId: null, status: restoredStatus },
       });
     });
 
     return this.prisma.pixReceipt.findFirst({
       where: { id: receiptId },
-      include: { blob: true, warnings: true, client: true, accountsReceivable: true },
+      include: {
+        blob: true,
+        warnings: true,
+        client: true,
+        accountReceivable: {
+          include: { installments: { orderBy: { installmentNumber: 'asc' } } },
+        },
+      },
     });
   }
 
@@ -522,7 +567,9 @@ export class PixReceiptsService {
         blob: true,
         warnings: true,
         client: true,
-        accountsReceivable: true,
+        accountReceivable: {
+          include: { installments: { orderBy: { installmentNumber: 'asc' } } },
+        },
       },
     });
   }

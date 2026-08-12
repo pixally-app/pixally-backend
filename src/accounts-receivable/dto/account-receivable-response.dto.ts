@@ -36,9 +36,6 @@ export class AccountReceivableResponseDto {
   @ApiProperty({ example: 'uuid' })
   clientId: string;
 
-  @ApiPropertyOptional({ example: 'uuid' })
-  pixReceiptId: string | null;
-
   @ApiProperty({ example: 'Danielle Melo' })
   clientName: string;
 

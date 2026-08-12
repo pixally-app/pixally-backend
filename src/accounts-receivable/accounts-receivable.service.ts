@@ -59,14 +59,15 @@ export class AccountsReceivableService {
       where: { id, userId },
       include: {
         installments: { orderBy: { installmentNumber: 'asc' } },
+        receipts: { select: { id: true, depositAmount: true, depositDateTime: true } },
       },
     });
 
     if (!record) {
-      throw new NotFoundException('Account receivable not found');
+      throw new NotFoundException('Conta a receber não encontrada');
     }
 
-    return this.toResponse(record, record.installments);
+    return this.toResponse(record, record.installments, record.receipts);
   }
 
   async create(userId: string, dto: CreateAccountReceivableDto) {
@@ -89,7 +90,6 @@ export class AccountsReceivableService {
         data: {
           userId,
           clientId: dto.clientId,
-          pixReceiptId: dto.pixReceiptId ?? null,
           clientName: client.name,
           serviceName: dto.serviceName,
           serviceDescription: dto.serviceDescription ?? null,
@@ -122,7 +122,6 @@ export class AccountsReceivableService {
       data: {
         userId,
         clientId: dto.clientId,
-        pixReceiptId: dto.pixReceiptId ?? null,
         clientName: client.name,
         serviceName: dto.serviceName,
         serviceDescription: dto.serviceDescription ?? null,
@@ -170,7 +169,6 @@ export class AccountsReceivableService {
     await this.prisma.accountReceivable.update({
       where: { id },
       data: {
-        ...(dto.pixReceiptId !== undefined && { pixReceiptId: dto.pixReceiptId }),
         ...(dto.serviceName !== undefined && { serviceName: dto.serviceName }),
         ...(dto.serviceDescription !== undefined && { serviceDescription: dto.serviceDescription }),
         ...(dto.totalAmount !== undefined && { totalAmount: dto.totalAmount }),
@@ -418,7 +416,6 @@ export class AccountsReceivableService {
       id: string;
       userId: string;
       clientId: string;
-      pixReceiptId: string | null;
       clientName: string;
       serviceName: string;
       serviceDescription: string | null;
@@ -440,6 +437,7 @@ export class AccountsReceivableService {
       createdAt: Date;
       updatedAt: Date;
     }[],
+    receipts?: { id: string; depositAmount: unknown; depositDateTime: Date | null }[],
   ) {
     const now = new Date();
     let computedStatus = record.status;
@@ -453,10 +451,12 @@ export class AccountsReceivableService {
       status: computedStatus,
     };
 
-    if (installments !== undefined) {
-      return { ...base, installments: installments.map((i) => this.toInstallmentResponse(i)) };
-    }
-
-    return base;
+    return {
+      ...base,
+      ...(installments !== undefined && { installments: installments.map((i) => this.toInstallmentResponse(i)) }),
+      ...(receipts !== undefined && {
+        receipts: receipts.map((r) => ({ ...r, depositAmount: r.depositAmount !== null ? Number(r.depositAmount) : null })),
+      }),
+    };
   }
 }
