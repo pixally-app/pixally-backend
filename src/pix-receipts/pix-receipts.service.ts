@@ -20,6 +20,8 @@ export class PixReceiptsService {
   ) {}
 
   async upload(userId: string, file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Arquivo não enviado');
+
     const fileUrl = await this.storage.upload(file.buffer, file.mimetype);
 
     const receipt = await this.prisma.pixReceipt.create({
@@ -201,43 +203,86 @@ export class PixReceiptsService {
         depositAmount = amountFromOcr;
       }
 
-      await this.prisma.pixReceipt.update({
-        where: { id: receiptId },
-        data: {
-          status,
-          clientId: resolvedClientId,
-          processmentOcrOutcome: ocrText,
-          pixTransactionId: pixId || null,
-          depositDateTime,
-          depositAmount,
-          depositOriginName: data.origem_nome || null,
-          depositOriginDocument: data.origem_documento || null,
-          depositOriginDocumentType: data.origem_tipo_documento || null,
-          depositOriginBank: data.origem_instituicao_bancaria || null,
-          depositOriginAgency: data.origem_agencia || null,
-          depositOriginAccount: data.origem_conta || null,
-          depositDestinationName: data.destino_nome || null,
-          depositDestinationDocument: data.destino_documento || null,
-          depositDestinationDocumentType: data.destino_tipo_documento || null,
-          depositDestinationBank: data.destino_instituicao_bancaria || null,
-          depositDestinationAgency: data.destino_agencia || null,
-          depositDestinationAccount: data.destino_conta || null,
-          description: data.descricao || null,
-        },
-      });
+      let resolvedAccountReceivableId: string | null = null;
+      let resolvedInstallmentId: string | null = null;
 
-      if (warnings.length > 0) {
-        await this.prisma.warning.createMany({
-          data: warnings.map((w) => ({
-            pixReceiptId: receiptId,
-            clientId: resolvedClientId,
-            type: w.type,
-            message: w.message,
-          })),
-        });
+      if (!hasRedFlag && resolvedClientId && depositAmount !== null) {
+        const match = await this.findReconciliationMatch(receipt!.userId, resolvedClientId, depositAmount);
+        if (match) {
+          resolvedAccountReceivableId = match.accountId;
+          resolvedInstallmentId = match.installmentId;
+        }
       }
 
-      this.logger.log(`Receipt ${receiptId} processado com status ${status}`);
+      const finalStatus = resolvedAccountReceivableId ? 'RECONCILED' : status;
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.pixReceipt.update({
+          where: { id: receiptId },
+          data: {
+            status: finalStatus,
+            clientId: resolvedClientId,
+            accountReceivableId: resolvedAccountReceivableId,
+            installmentId: resolvedInstallmentId,
+            processmentOcrOutcome: ocrText,
+            pixTransactionId: pixId || null,
+            depositDateTime,
+            depositAmount,
+            depositOriginName: data.origem_nome || null,
+            depositOriginDocument: data.origem_documento || null,
+            depositOriginDocumentType: data.origem_tipo_documento || null,
+            depositOriginBank: data.origem_instituicao_bancaria || null,
+            depositOriginAgency: data.origem_agencia || null,
+            depositOriginAccount: data.origem_conta || null,
+            depositDestinationName: data.destino_nome || null,
+            depositDestinationDocument: data.destino_documento || null,
+            depositDestinationDocumentType: data.destino_tipo_documento || null,
+            depositDestinationBank: data.destino_instituicao_bancaria || null,
+            depositDestinationAgency: data.destino_agencia || null,
+            depositDestinationAccount: data.destino_conta || null,
+            description: data.descricao || null,
+          },
+        });
+
+        if (resolvedAccountReceivableId) {
+          const now = new Date();
+
+          if (resolvedInstallmentId) {
+            await tx.installment.update({
+              where: { id: resolvedInstallmentId },
+              data: { paidAt: now },
+            });
+          } else {
+            await tx.installment.updateMany({
+              where: { accountReceivableId: resolvedAccountReceivableId, paidAt: null },
+              data: { paidAt: now },
+            });
+          }
+
+          const freshInstallments = await tx.installment.findMany({
+            where: { accountReceivableId: resolvedAccountReceivableId },
+          });
+          const allPaid = freshInstallments.length === 0 || freshInstallments.every((i) => i.paidAt !== null);
+
+          await tx.accountReceivable.update({
+            where: { id: resolvedAccountReceivableId },
+            data: { status: allPaid ? 'PAID' : 'PENDING', paidAt: allPaid ? now : null, matchedAutomatically: true },
+          });
+        }
+
+        if (warnings.length > 0) {
+          await tx.warning.createMany({
+            data: warnings.map((w) => ({
+              pixReceiptId: receiptId,
+              clientId: resolvedClientId,
+              type: w.type,
+              message: w.message,
+            })),
+          });
+        }
+      });
+
+      this.logger.log(`Receipt ${receiptId} processado com status ${finalStatus}`);
     } catch (err) {
       this.logger.error(`Falha ao processar receipt ${receiptId}: ${err}`);
       await this.prisma.pixReceipt.update({
@@ -284,12 +329,42 @@ export class PixReceiptsService {
     return isNaN(parsed) ? null : parsed;
   }
 
+  private async findReconciliationMatch(
+    userId: string,
+    clientId: string,
+    depositAmount: number,
+  ): Promise<{ accountId: string; installmentId: string | null } | null> {
+    const pendingAccounts = await this.prisma.accountReceivable.findMany({
+      where: { userId, clientId, status: { notIn: ['PAID', 'CANCELLED'] } },
+      include: { installments: { orderBy: { installmentNumber: 'asc' } } },
+    });
+
+    const matches: Array<{ accountId: string; installmentId: string | null }> = [];
+
+    for (const account of pendingAccounts) {
+      const accountTotal = Number(account.totalAmount);
+      if (depositAmount >= accountTotal) {
+        matches.push({ accountId: account.id, installmentId: null });
+      } else {
+        const inst = account.installments.find(
+          (i) => !i.paidAt && Math.abs(Number(i.amount) - depositAmount) < 0.01,
+        );
+        if (inst) matches.push({ accountId: account.id, installmentId: inst.id });
+      }
+    }
+
+    return matches.length === 1 ? matches[0] : null;
+  }
+
   async findAll(
     userId: string,
     page = 1,
     limit = 20,
     filters: { status?: string; origin?: string; clientName?: string } = {},
   ) {
+    page = Math.max(1, page);
+    limit = Math.max(1, Math.min(limit, 100));
+
     const skip = (page - 1) * limit;
 
     const where: PixReceiptWhereInput = { userId };
@@ -585,10 +660,44 @@ export class PixReceiptsService {
       throw new BadRequestException('Não é possível deletar um comprovante que ainda está sendo analisado');
     }
 
-    await this.prisma.$transaction([
-      this.prisma.pixReceiptBlob.deleteMany({ where: { pixReceiptsId: id } }),
-      this.prisma.warning.deleteMany({ where: { pixReceiptId: id } }),
-      this.prisma.pixReceipt.delete({ where: { id } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      if (receipt.accountReceivableId) {
+        const now = new Date();
+
+        if (receipt.installmentId) {
+          await tx.installment.update({
+            where: { id: receipt.installmentId },
+            data: { paidAt: null },
+          });
+        } else {
+          const otherReceipts = await tx.pixReceipt.findMany({
+            where: { accountReceivableId: receipt.accountReceivableId, id: { not: id } },
+            select: { installmentId: true },
+          });
+          const protectedIds = otherReceipts.map((r) => r.installmentId).filter(Boolean) as string[];
+          await tx.installment.updateMany({
+            where: {
+              accountReceivableId: receipt.accountReceivableId,
+              paidAt: { not: null },
+              ...(protectedIds.length > 0 && { id: { notIn: protectedIds } }),
+            },
+            data: { paidAt: null },
+          });
+        }
+
+        const remaining = await tx.installment.findMany({
+          where: { accountReceivableId: receipt.accountReceivableId },
+        });
+        const allPaid = remaining.length > 0 && remaining.every((i) => i.paidAt !== null);
+        await tx.accountReceivable.update({
+          where: { id: receipt.accountReceivableId },
+          data: { status: allPaid ? 'PAID' : 'PENDING', paidAt: allPaid ? now : null },
+        });
+      }
+
+      await tx.pixReceiptBlob.deleteMany({ where: { pixReceiptsId: id } });
+      await tx.warning.deleteMany({ where: { pixReceiptId: id } });
+      await tx.pixReceipt.delete({ where: { id } });
+    });
   }
 }

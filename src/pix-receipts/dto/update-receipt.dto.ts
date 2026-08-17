@@ -5,7 +5,6 @@ export enum ReceiptStatus {
   RECEIVED = 'RECEIVED',
   RED_FLAG = 'RED_FLAG',
   YELLOW_FLAG = 'YELLOW_FLAG',
-  RECONCILED = 'RECONCILED',
   ERROR = 'ERROR',
 }
 

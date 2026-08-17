@@ -102,7 +102,6 @@ export class PixReceiptsController {
   @ApiResponse({ status: 400, description: 'Conta cancelada' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   @ApiResponse({ status: 404, description: 'Comprovante ou conta a receber não encontrados' })
-  @ApiResponse({ status: 409, description: 'Comprovante ou conta já conciliados' })
   reconcile(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
