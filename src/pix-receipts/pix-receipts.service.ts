@@ -1,15 +1,20 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import type { PixReceiptModel, PixReceiptWhereInput } from '../../generated/prisma/models/PixReceipt.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpdateReceiptDto } from './dto/update-receipt.dto.js';
 import { OcrService } from './ocr.service.js';
 import { OpenAiService } from './openai.service.js';
+import type { ReceiptData } from './openai.service.js';
+import { QueueService } from './queue.service.js';
 import { StorageService } from './storage.service.js';
 
 type ReceiptWarning = { type: string; message: string };
 
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAYS_MS = [30_000, 60_000];
+
 @Injectable()
-export class PixReceiptsService {
+export class PixReceiptsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(PixReceiptsService.name);
 
   constructor(
@@ -17,7 +22,26 @@ export class PixReceiptsService {
     private readonly storage: StorageService,
     private readonly ocr: OcrService,
     private readonly openai: OpenAiService,
+    private readonly queue: QueueService,
   ) {}
+
+  async onApplicationBootstrap() {
+    const stuck = await this.prisma.pixReceipt.findMany({
+      where: { status: 'ANALYSING' },
+      include: { blob: true },
+    });
+
+    if (stuck.length === 0) return;
+
+    this.logger.warn(`Recuperando ${stuck.length} comprovante(s) presos em ANALYSING...`);
+
+    for (const receipt of stuck) {
+      const blob = receipt.blob[0];
+      if (!blob?.fileUrl || !blob.mimeType) continue;
+      const { fileUrl, mimeType } = blob;
+      this.queue.enqueue(() => this.processReceipt(receipt.id, fileUrl, mimeType));
+    }
+  }
 
   async upload(userId: string, file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Arquivo não enviado');
@@ -41,9 +65,7 @@ export class PixReceiptsService {
       },
     });
 
-    this.processReceipt(receipt.id, fileUrl, file.mimetype).catch((err) =>
-      this.logger.error(`Erro ao processar receipt ${receipt.id}: ${err}`),
-    );
+    this.queue.enqueue(() => this.processReceipt(receipt.id, fileUrl, file.mimetype));
 
     return receipt;
   }
@@ -54,9 +76,7 @@ export class PixReceiptsService {
       data: { status: 'ANALYSING' },
     });
 
-    this.processReceipt(receiptId, imageUrl, mimeType).catch((err) =>
-      this.logger.error(`Erro ao processar receipt ${receiptId}: ${err}`),
-    );
+    this.queue.enqueue(() => this.processReceipt(receiptId, imageUrl, mimeType));
   }
 
   private async processReceipt(receiptId: string, imageUrl: string, mimeType: string) {
@@ -65,9 +85,12 @@ export class PixReceiptsService {
     try {
       this.logger.log(`Iniciando processamento do receipt ${receiptId}`);
 
-      receipt = await this.prisma.pixReceipt.findUnique({
-        where: { id: receiptId },
-      });
+      receipt = await this.prisma.pixReceipt.findUnique({ where: { id: receiptId } });
+
+      if (!receipt) {
+        this.logger.warn(`Receipt ${receiptId} não encontrado, abortando processamento.`);
+        return;
+      }
 
       if (mimeType === 'application/pdf') {
         const jpegBuffer = await this.ocr.pdfToJpeg(imageUrl);
@@ -80,209 +103,24 @@ export class PixReceiptsService {
         mimeType = 'image/jpeg';
       }
 
-      const ocrText = await this.ocr.extractText(imageUrl);
-
-      const data = await this.openai.analyzeReceipt(imageUrl, ocrText);
-
-      if (data.error) {
-        await this.prisma.pixReceipt.update({
-          where: { id: receiptId },
-          data: { status: 'ERROR', processmentOcrOutcome: ocrText },
-        });
-        await this.prisma.warning.create({
-          data: {
-            pixReceiptId: receiptId,
-            clientId: receipt?.clientId ?? null,
-            type: 'red',
-            message: 'Falha ao processar o comprovante',
-          },
-        });
-        return;
-      }
-
-      const warnings: ReceiptWarning[] = [];
-
-      const pixIdFromGpt = data.id_transferencia?.trim() ?? '';
-      const pixIdFromOcr = this.extractPixIdFromOcr(ocrText);
-
-      const isValidGpt = pixIdFromGpt.startsWith('E') && pixIdFromGpt.length === 32;
-      const isValidOcr = pixIdFromOcr.startsWith('E') && pixIdFromOcr.length === 32;
-
-      let pixId = '';
-      if (isValidOcr && pixIdFromOcr !== pixIdFromGpt) {
-        this.logger.warn(`PIX ID do GPT divergiu do OCR — usando OCR: ${pixIdFromOcr}`);
-        pixId = pixIdFromOcr;
-      } else if (isValidGpt) {
-        pixId = pixIdFromGpt;
-      } else if (isValidOcr) {
-        pixId = pixIdFromOcr;
-      }
-
-      const isValidPixId = pixId.length === 32 && pixId.startsWith('E');
-
-      if (!isValidPixId) {
-        warnings.push({ type: 'red', message: 'ID da transação PIX inválido ou ausente' });
-      }
-
-      if (isValidPixId) {
-        const duplicate = await this.prisma.pixReceipt.findFirst({
-          where: {
-            pixTransactionId: pixId,
-            id: { not: receiptId },
-          },
-        });
-
-        if (duplicate) {
-          warnings.push({ type: 'red', message: 'Comprovante duplicado — já existe um registro com o mesmo ID PIX' });
-        }
-      }
-
-      const missingFields = [
-        data.valor,
-        data.origem_nome,
-        data.destino_nome,
-        data.data_hora,
-      ].some((f) => !f || f.trim() === '');
-
-      if (missingFields) {
-        warnings.push({ type: 'yellow', message: 'Alguns campos não puderam ser lidos com precisão' });
-      }
-
-      let depositDateTime: Date | null = null;
-      if (data.data_hora) {
-        const parsed = new Date(data.data_hora);
-        if (!isNaN(parsed.getTime())) depositDateTime = parsed;
-      }
-
-      if (depositDateTime) {
-        const conflicting = await this.prisma.pixReceipt.findFirst({
-          where: {
-            userId: receipt!.userId,
-            depositDateTime,
-            id: { not: receiptId },
-          },
-        });
-
-        if (conflicting) {
-          warnings.push({ type: 'red', message: 'Data e hora conflitam com outro comprovante já registrado' });
-        }
-      }
-
-      let resolvedClientId = receipt?.clientId ?? null;
-
-      if (!resolvedClientId) {
-        if (receipt?.jid) {
-          const byPhone = await this.prisma.phoneClient.findFirst({
-            where: {
-              phoneNumber: { endsWith: receipt.jid.slice(-8) },
-              client: { userId: receipt.userId, deletedAt: null },
-            },
-            select: { clientId: true },
-          });
-          resolvedClientId = byPhone?.clientId ?? null;
-        }
-      }
-
-      if (!resolvedClientId) {
-        warnings.push({ type: 'yellow', message: 'Nenhum cliente vinculado a este comprovante' });
-      }
-
-      const hasRedFlag = warnings.some((w) => w.type === 'red');
-      const hasYellowFlag = warnings.some((w) => w.type === 'yellow');
-
-      const status = hasRedFlag ? 'RED_FLAG' : hasYellowFlag ? 'YELLOW_FLAG' : 'RECEIVED';
-
-      const amountFromGpt = this.parseAmount(data.valor);
-      const amountFromOcr = this.extractAmountFromOcr(ocrText);
-
-      let depositAmount: number | null = amountFromGpt;
-      if (amountFromOcr !== null && amountFromGpt !== null && Math.abs(amountFromOcr - amountFromGpt) > 0.01) {
-        this.logger.warn(`Valor do GPT (${amountFromGpt}) divergiu do OCR (${amountFromOcr}) — usando OCR`);
-        depositAmount = amountFromOcr;
-      } else if (amountFromOcr !== null && amountFromGpt === null) {
-        depositAmount = amountFromOcr;
-      }
-
-      let resolvedAccountReceivableId: string | null = null;
-      let resolvedInstallmentId: string | null = null;
-
-      if (!hasRedFlag && resolvedClientId && depositAmount !== null) {
-        const match = await this.findReconciliationMatch(receipt!.userId, resolvedClientId, depositAmount);
-        if (match) {
-          resolvedAccountReceivableId = match.accountId;
-          resolvedInstallmentId = match.installmentId;
-        }
-      }
-
-      const finalStatus = resolvedAccountReceivableId ? 'RECONCILED' : status;
-
-      await this.prisma.$transaction(async (tx) => {
-        await tx.pixReceipt.update({
-          where: { id: receiptId },
-          data: {
-            status: finalStatus,
-            clientId: resolvedClientId,
-            accountReceivableId: resolvedAccountReceivableId,
-            installmentId: resolvedInstallmentId,
-            processmentOcrOutcome: ocrText,
-            pixTransactionId: pixId || null,
-            depositDateTime,
-            depositAmount,
-            depositOriginName: data.origem_nome || null,
-            depositOriginDocument: data.origem_documento || null,
-            depositOriginDocumentType: data.origem_tipo_documento || null,
-            depositOriginBank: data.origem_instituicao_bancaria || null,
-            depositOriginAgency: data.origem_agencia || null,
-            depositOriginAccount: data.origem_conta || null,
-            depositDestinationName: data.destino_nome || null,
-            depositDestinationDocument: data.destino_documento || null,
-            depositDestinationDocumentType: data.destino_tipo_documento || null,
-            depositDestinationBank: data.destino_instituicao_bancaria || null,
-            depositDestinationAgency: data.destino_agencia || null,
-            depositDestinationAccount: data.destino_conta || null,
-            description: data.descricao || null,
-          },
-        });
-
-        if (resolvedAccountReceivableId) {
-          const now = new Date();
-
-          if (resolvedInstallmentId) {
-            await tx.installment.update({
-              where: { id: resolvedInstallmentId },
-              data: { paidAt: now },
-            });
-          } else {
-            await tx.installment.updateMany({
-              where: { accountReceivableId: resolvedAccountReceivableId, paidAt: null },
-              data: { paidAt: now },
-            });
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          await this.runProcessing(receiptId, imageUrl, receipt!);
+          return;
+        } catch (err) {
+          lastError = err;
+          if (attempt < MAX_ATTEMPTS) {
+            const delay = RETRY_DELAYS_MS[attempt - 1];
+            this.logger.warn(
+              `Receipt ${receiptId}: tentativa ${attempt}/${MAX_ATTEMPTS} falhou. Aguardando ${delay / 1000}s...`,
+            );
+            await new Promise((r) => setTimeout(r, delay));
           }
-
-          const freshInstallments = await tx.installment.findMany({
-            where: { accountReceivableId: resolvedAccountReceivableId },
-          });
-          const allPaid = freshInstallments.length === 0 || freshInstallments.every((i) => i.paidAt !== null);
-
-          await tx.accountReceivable.update({
-            where: { id: resolvedAccountReceivableId },
-            data: { status: allPaid ? 'PAID' : 'PENDING', paidAt: allPaid ? now : null, matchedAutomatically: true },
-          });
         }
+      }
+      throw lastError;
 
-        if (warnings.length > 0) {
-          await tx.warning.createMany({
-            data: warnings.map((w) => ({
-              pixReceiptId: receiptId,
-              clientId: resolvedClientId,
-              type: w.type,
-              message: w.message,
-            })),
-          });
-        }
-      });
-
-      this.logger.log(`Receipt ${receiptId} processado com status ${finalStatus}`);
     } catch (err) {
       this.logger.error(`Falha ao processar receipt ${receiptId}: ${err}`);
       await this.prisma.pixReceipt.update({
@@ -298,6 +136,239 @@ export class PixReceiptsService {
         },
       });
     }
+  }
+
+  private async runProcessing(receiptId: string, imageUrl: string, receipt: PixReceiptModel) {
+    const warnings: ReceiptWarning[] = [];
+
+    const ocrText = await this.ocr.extractText(imageUrl);
+
+    let data: ReceiptData;
+    let usedOcrFallback = false;
+
+    try {
+      const gptResult = await this.openai.analyzeReceipt(imageUrl, ocrText);
+      if (gptResult.error) {
+        this.logger.warn(`GPT retornou erro para receipt ${receiptId}: ${gptResult.error}. Usando fallback OCR.`);
+        data = this.buildOcrFallbackData(ocrText);
+        usedOcrFallback = true;
+      } else {
+        data = gptResult;
+      }
+    } catch (err) {
+      this.logger.warn(`GPT indisponível para receipt ${receiptId}, usando fallback OCR: ${err}`);
+      data = this.buildOcrFallbackData(ocrText);
+      usedOcrFallback = true;
+    }
+
+    if (usedOcrFallback) {
+      warnings.push({ type: 'yellow', message: 'Análise de IA indisponível, dados extraídos parcialmente' });
+    }
+
+    const pixIdFromGpt = data.id_transferencia?.trim() ?? '';
+    const pixIdFromOcr = this.extractPixIdFromOcr(ocrText);
+
+    const isValidGpt = pixIdFromGpt.startsWith('E') && pixIdFromGpt.length === 32;
+    const isValidOcr = pixIdFromOcr.startsWith('E') && pixIdFromOcr.length === 32;
+
+    let pixId = '';
+    if (isValidOcr && pixIdFromOcr !== pixIdFromGpt) {
+      this.logger.warn(`PIX ID do GPT divergiu do OCR — usando OCR: ${pixIdFromOcr}`);
+      pixId = pixIdFromOcr;
+    } else if (isValidGpt) {
+      pixId = pixIdFromGpt;
+    } else if (isValidOcr) {
+      pixId = pixIdFromOcr;
+    }
+
+    const isValidPixId = pixId.length === 32 && pixId.startsWith('E');
+
+    if (!isValidPixId) {
+      warnings.push({ type: 'red', message: 'ID da transação PIX inválido ou ausente' });
+    }
+
+    if (isValidPixId) {
+      const duplicate = await this.prisma.pixReceipt.findFirst({
+        where: { pixTransactionId: pixId, id: { not: receiptId } },
+      });
+      if (duplicate) {
+        warnings.push({ type: 'red', message: 'Comprovante duplicado — já existe um registro com o mesmo ID PIX' });
+      }
+    }
+
+    const missingFields = [data.valor, data.origem_nome, data.destino_nome, data.data_hora].some(
+      (f) => !f || f.trim() === '',
+    );
+    if (missingFields) {
+      warnings.push({ type: 'yellow', message: 'Alguns campos não puderam ser lidos com precisão' });
+    }
+
+    let depositDateTime: Date | null = null;
+    if (data.data_hora) {
+      const parsed = new Date(data.data_hora);
+      if (!isNaN(parsed.getTime())) depositDateTime = parsed;
+    }
+
+    if (depositDateTime) {
+      const conflicting = await this.prisma.pixReceipt.findFirst({
+        where: { userId: receipt.userId, depositDateTime, id: { not: receiptId } },
+      });
+      if (conflicting) {
+        warnings.push({ type: 'red', message: 'Data e hora conflitam com outro comprovante já registrado' });
+      }
+    }
+
+    let resolvedClientId = receipt.clientId ?? null;
+
+    if (!resolvedClientId && receipt.jid) {
+      const byPhone = await this.prisma.phoneClient.findFirst({
+        where: {
+          phoneNumber: { endsWith: receipt.jid.slice(-8) },
+          client: { userId: receipt.userId, deletedAt: null },
+        },
+        select: { clientId: true },
+      });
+      resolvedClientId = byPhone?.clientId ?? null;
+    }
+
+    if (!resolvedClientId) {
+      warnings.push({ type: 'yellow', message: 'Nenhum cliente vinculado a este comprovante' });
+    }
+
+    const hasRedFlag = warnings.some((w) => w.type === 'red');
+    const hasYellowFlag = warnings.some((w) => w.type === 'yellow');
+    const status = hasRedFlag ? 'RED_FLAG' : hasYellowFlag ? 'YELLOW_FLAG' : 'RECEIVED';
+
+    const amountFromGpt = this.parseAmount(data.valor);
+    const amountFromOcr = this.extractAmountFromOcr(ocrText);
+
+    let depositAmount: number | null = amountFromGpt;
+    if (amountFromOcr !== null && amountFromGpt !== null && Math.abs(amountFromOcr - amountFromGpt) > 0.01) {
+      this.logger.warn(`Valor do GPT (${amountFromGpt}) divergiu do OCR (${amountFromOcr}) — usando OCR`);
+      depositAmount = amountFromOcr;
+    } else if (amountFromOcr !== null && amountFromGpt === null) {
+      depositAmount = amountFromOcr;
+    }
+
+    let resolvedAccountReceivableId: string | null = null;
+    let resolvedInstallmentId: string | null = null;
+
+    if (!hasRedFlag && resolvedClientId && depositAmount !== null) {
+      const match = await this.findReconciliationMatch(receipt.userId, resolvedClientId, depositAmount);
+      if (match) {
+        resolvedAccountReceivableId = match.accountId;
+        resolvedInstallmentId = match.installmentId;
+      }
+    }
+
+    const finalStatus = resolvedAccountReceivableId ? 'RECONCILED' : status;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.pixReceipt.update({
+        where: { id: receiptId },
+        data: {
+          status: finalStatus,
+          clientId: resolvedClientId,
+          accountReceivableId: resolvedAccountReceivableId,
+          installmentId: resolvedInstallmentId,
+          processmentOcrOutcome: ocrText,
+          pixTransactionId: pixId || null,
+          depositDateTime,
+          depositAmount,
+          depositOriginName: data.origem_nome || null,
+          depositOriginDocument: data.origem_documento || null,
+          depositOriginDocumentType: data.origem_tipo_documento || null,
+          depositOriginBank: data.origem_instituicao_bancaria || null,
+          depositOriginAgency: data.origem_agencia || null,
+          depositOriginAccount: data.origem_conta || null,
+          depositDestinationName: data.destino_nome || null,
+          depositDestinationDocument: data.destino_documento || null,
+          depositDestinationDocumentType: data.destino_tipo_documento || null,
+          depositDestinationBank: data.destino_instituicao_bancaria || null,
+          depositDestinationAgency: data.destino_agencia || null,
+          depositDestinationAccount: data.destino_conta || null,
+          description: data.descricao || null,
+        },
+      });
+
+      if (resolvedAccountReceivableId) {
+        const now = new Date();
+
+        if (resolvedInstallmentId) {
+          await tx.installment.update({
+            where: { id: resolvedInstallmentId },
+            data: { paidAt: now },
+          });
+        } else {
+          await tx.installment.updateMany({
+            where: { accountReceivableId: resolvedAccountReceivableId, paidAt: null },
+            data: { paidAt: now },
+          });
+        }
+
+        const freshInstallments = await tx.installment.findMany({
+          where: { accountReceivableId: resolvedAccountReceivableId },
+        });
+        const allPaid = freshInstallments.length === 0 || freshInstallments.every((i) => i.paidAt !== null);
+
+        await tx.accountReceivable.update({
+          where: { id: resolvedAccountReceivableId },
+          data: { status: allPaid ? 'PAID' : 'PENDING', paidAt: allPaid ? now : null, matchedAutomatically: true },
+        });
+      }
+
+      if (warnings.length > 0) {
+        await tx.warning.createMany({
+          data: warnings.map((w) => ({
+            pixReceiptId: receiptId,
+            clientId: resolvedClientId,
+            type: w.type,
+            message: w.message,
+          })),
+        });
+      }
+    });
+
+    this.logger.log(`Receipt ${receiptId} processado com status ${finalStatus}`);
+  }
+
+  private buildOcrFallbackData(ocrText: string): ReceiptData {
+    const amountMatch = ocrText.match(/R\$\s?[0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})/);
+    return {
+      id_transferencia: this.extractPixIdFromOcr(ocrText),
+      valor: amountMatch?.[0] ?? '',
+      data_hora: this.extractDateFromOcr(ocrText) ?? '',
+      descricao: '',
+      origem_nome: '',
+      origem_documento: this.extractDocumentFromOcr(ocrText) ?? '',
+      origem_tipo_documento: '',
+      origem_instituicao_bancaria: '',
+      origem_agencia: '',
+      origem_conta: '',
+      destino_nome: '',
+      destino_documento: '',
+      destino_tipo_documento: '',
+      destino_instituicao_bancaria: '',
+      destino_agencia: '',
+      destino_conta: '',
+      destino_tipo_conta: '',
+      destino_chave_pix: '',
+    };
+  }
+
+  private extractDateFromOcr(ocrText: string): string | null {
+    const match = ocrText.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (!match) return null;
+    const [, day, month, year, h = '00', m = '00', s = '00'] = match;
+    return `${year}-${month}-${day}T${h}:${m}:${s}`;
+  }
+
+  private extractDocumentFromOcr(ocrText: string): string | null {
+    const cnpj = ocrText.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/);
+    if (cnpj) return cnpj[0];
+    const cpf = ocrText.match(/\d{3}\.\d{3}\.\d{3}-\d{2}/);
+    if (cpf) return cpf[0];
+    return null;
   }
 
   private extractPixIdFromOcr(ocrText: string): string {
