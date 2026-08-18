@@ -31,7 +31,7 @@ export class PixReceiptsController {
 
   @Post('upload')
   @HttpCode(201)
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Enviar comprovante manualmente (imagem ou PDF)' })
   @ApiBody({
@@ -43,7 +43,9 @@ export class PixReceiptsController {
     },
   })
   @ApiResponse({ status: 201, description: 'Comprovante recebido e em processamento' })
+  @ApiResponse({ status: 400, description: 'Arquivo não enviado' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 413, description: 'Arquivo maior que 5MB' })
   upload(
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,

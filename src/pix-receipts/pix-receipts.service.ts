@@ -93,6 +93,7 @@ export class PixReceiptsService implements OnApplicationBootstrap {
       }
 
       if (mimeType === 'application/pdf') {
+        const originalPdfUrl = imageUrl;
         const jpegBuffer = await this.ocr.pdfToJpeg(imageUrl);
         const jpegUrl = await this.storage.upload(jpegBuffer, 'image/jpeg');
         await this.prisma.pixReceiptBlob.updateMany({
@@ -101,6 +102,7 @@ export class PixReceiptsService implements OnApplicationBootstrap {
         });
         imageUrl = jpegUrl;
         mimeType = 'image/jpeg';
+        await this.storage.delete(originalPdfUrl);
       }
 
       let lastError: unknown;
@@ -723,6 +725,7 @@ export class PixReceiptsService implements OnApplicationBootstrap {
   async remove(userId: string, id: string) {
     const receipt = await this.prisma.pixReceipt.findFirst({
       where: { id, userId },
+      include: { blob: true },
     });
 
     if (!receipt) throw new NotFoundException('Comprovante não encontrado');
@@ -770,5 +773,9 @@ export class PixReceiptsService implements OnApplicationBootstrap {
       await tx.warning.deleteMany({ where: { pixReceiptId: id } });
       await tx.pixReceipt.delete({ where: { id } });
     });
+
+    for (const blob of receipt.blob) {
+      if (blob.fileUrl) await this.storage.delete(blob.fileUrl);
+    }
   }
 }

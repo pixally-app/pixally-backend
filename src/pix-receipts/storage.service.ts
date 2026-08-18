@@ -33,4 +33,15 @@ export class StorageService {
     const { data } = this.supabase.storage.from(this.bucket).getPublicUrl(filename);
     return data.publicUrl;
   }
+
+  async delete(fileUrl: string): Promise<void> {
+    const filename = fileUrl.split('/').pop();
+    if (!filename) return;
+
+    const { error } = await this.supabase.storage.from(this.bucket).remove([filename]);
+
+    if (error) {
+      this.logger.warn(`Erro ao deletar arquivo do Supabase: ${error.message}`);
+    }
+  }
 }
