@@ -56,7 +56,7 @@ describe('PATCH /accounts-receivable (CT-CON-003)', () => {
       installment: {
         updateMany: jest.fn(),
       },
-      $transaction: jest.fn().mockImplementation((args: any[]) => Promise.all(args)),
+      $transaction: jest.fn(),
     };
 
     ({ app, jwtService } = await buildTestApp({
@@ -68,7 +68,13 @@ describe('PATCH /accounts-receivable (CT-CON-003)', () => {
   });
 
   afterAll(async () => { await app.close(); });
-  beforeEach(() => { prismaService.user.findUnique.mockResolvedValue({ isActive: true }); });
+  beforeEach(() => {
+    prismaService.user.findUnique.mockResolvedValue({ isActive: true });
+    prismaService.$transaction.mockImplementation((callbackOrArray: any) => {
+      if (Array.isArray(callbackOrArray)) return Promise.all(callbackOrArray);
+      return callbackOrArray(prismaService);
+    });
+  });
   afterEach(() => { jest.resetAllMocks(); });
 
   it('CT-CON-003-01 - should return 200 when updating totalAmount', async () => {

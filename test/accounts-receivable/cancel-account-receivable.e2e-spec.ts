@@ -13,10 +13,8 @@ describe('PATCH /accounts-receivable/:id/cancel', () => {
   let accessToken: string;
   let prismaService: {
     user: { findUnique: jest.Mock<any> };
-    accountReceivable: {
-      findFirst: jest.Mock<any>;
-      update: jest.Mock<any>;
-    };
+    accountReceivable: { findFirst: jest.Mock<any>; update: jest.Mock<any> };
+    pixReceipt: { count: jest.Mock<any> };
   };
 
   const mockUserId = faker.string.uuid();
@@ -44,10 +42,8 @@ describe('PATCH /accounts-receivable/:id/cancel', () => {
   beforeAll(async () => {
     prismaService = {
       user: { findUnique: jest.fn() },
-      accountReceivable: {
-        findFirst: jest.fn(),
-        update: jest.fn(),
-      },
+      accountReceivable: { findFirst: jest.fn(), update: jest.fn() },
+      pixReceipt: { count: jest.fn() },
     };
 
     ({ app, jwtService } = await buildTestApp({
@@ -59,7 +55,10 @@ describe('PATCH /accounts-receivable/:id/cancel', () => {
   });
 
   afterAll(async () => { await app.close(); });
-  beforeEach(() => { prismaService.user.findUnique.mockResolvedValue({ isActive: true }); });
+  beforeEach(() => {
+    prismaService.user.findUnique.mockResolvedValue({ isActive: true });
+    prismaService.pixReceipt.count.mockResolvedValue(0);
+  });
   afterEach(() => { jest.resetAllMocks(); });
 
   it('should return 200 and cancel a pending account', async () => {
