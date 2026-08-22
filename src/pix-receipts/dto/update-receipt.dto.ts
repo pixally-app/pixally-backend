@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, ValidateIf } from 'class-validator';
 
 export enum ReceiptStatus {
   RECEIVED = 'RECEIVED',
@@ -29,8 +29,9 @@ export class UpdateReceiptDto {
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ nullable: true })
   @IsOptional()
+  @ValidateIf((o) => o.depositAmount !== null)
   @IsNumber()
   depositAmount?: number | null;
 

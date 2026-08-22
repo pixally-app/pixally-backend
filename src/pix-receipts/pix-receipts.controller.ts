@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -18,6 +19,7 @@ import { memoryStorage } from 'multer';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import type { AuthenticatedUser } from '../auth/jwt.strategy.js';
+import { ListReceiptsQueryDto } from './dto/list-receipts-query.dto.js';
 import { ReconcileReceiptDto } from './dto/reconcile-receipt.dto.js';
 import { UpdateReceiptDto } from './dto/update-receipt.dto.js';
 import { PixReceiptsService } from './pix-receipts.service.js';
@@ -56,20 +58,17 @@ export class PixReceiptsController {
   @Get()
   @ApiOperation({ summary: 'Listar comprovantes do usuário autenticado' })
   @ApiResponse({ status: 200, description: 'Lista paginada de comprovantes' })
+  @ApiResponse({ status: 400, description: 'Parâmetros de query inválidos' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   findAll(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('status') status?: string,
-    @Query('origin') origin?: string,
-    @Query('clientName') clientName?: string,
+    @Query() query: ListReceiptsQueryDto,
   ) {
     return this.pixReceiptsService.findAll(
       user.userId,
-      page ? parseInt(page) : 1,
-      limit ? parseInt(limit) : 20,
-      { status, origin, clientName },
+      query.page,
+      query.limit,
+      { status: query.status, origin: query.origin, clientName: query.clientName },
     );
   }
 
@@ -80,7 +79,7 @@ export class PixReceiptsController {
   @ApiResponse({ status: 404, description: 'Comprovante não encontrado' })
   findOne(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.pixReceiptsService.findOne(user.userId, id);
   }
@@ -92,7 +91,7 @@ export class PixReceiptsController {
   @ApiResponse({ status: 404, description: 'Comprovante não encontrado' })
   update(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateReceiptDto,
   ) {
     return this.pixReceiptsService.update(user.userId, id, body);
@@ -106,7 +105,7 @@ export class PixReceiptsController {
   @ApiResponse({ status: 404, description: 'Comprovante ou conta a receber não encontrados' })
   reconcile(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() body: ReconcileReceiptDto,
   ) {
     return this.pixReceiptsService.reconcile(user.userId, id, body.accountReceivableId);
@@ -120,7 +119,7 @@ export class PixReceiptsController {
   @ApiResponse({ status: 404, description: 'Comprovante não encontrado' })
   unreconcile(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.pixReceiptsService.unreconcile(user.userId, id);
   }
@@ -134,7 +133,7 @@ export class PixReceiptsController {
   @ApiResponse({ status: 404, description: 'Comprovante não encontrado' })
   remove(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.pixReceiptsService.remove(user.userId, id);
   }
