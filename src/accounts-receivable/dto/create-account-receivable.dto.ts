@@ -39,11 +39,6 @@ export class CreateAccountReceivableDto {
   @IsNotEmpty()
   clientId: string;
 
-  @ApiPropertyOptional({ example: 'uuid-do-comprovante', description: 'ID do comprovante PIX vinculado' })
-  @IsOptional()
-  @IsUUID()
-  pixReceiptId?: string;
-
   @ApiProperty({ example: 'Manutenção de ar condicionado', description: 'Nome do serviço' })
   @IsString()
   @IsNotEmpty()
