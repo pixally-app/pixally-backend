@@ -64,7 +64,7 @@ export class AccountsReceivableService {
     });
 
     if (!record) {
-      throw new NotFoundException('Conta a receber não encontrada');
+      throw new NotFoundException('Account receivable not found');
     }
 
     return this.toResponse(record, record.installments, record.receipts);

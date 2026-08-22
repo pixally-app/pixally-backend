@@ -58,7 +58,7 @@ describe('PATCH /accounts-receivable/:id/installments/:installmentId', () => {
       user: { findUnique: jest.fn() },
       accountReceivable: { findFirst: jest.fn() },
       installment: { update: jest.fn() },
-      $transaction: jest.fn().mockImplementation((args: any[]) => Promise.all(args)),
+      $transaction: jest.fn(),
     };
 
     ({ app, jwtService } = await buildTestApp({
@@ -70,7 +70,13 @@ describe('PATCH /accounts-receivable/:id/installments/:installmentId', () => {
   });
 
   afterAll(async () => { await app.close(); });
-  beforeEach(() => { prismaService.user.findUnique.mockResolvedValue({ isActive: true }); });
+  beforeEach(() => {
+    prismaService.user.findUnique.mockResolvedValue({ isActive: true });
+    prismaService.$transaction.mockImplementation((callbackOrArray: any) => {
+      if (Array.isArray(callbackOrArray)) return Promise.all(callbackOrArray);
+      return callbackOrArray(prismaService);
+    });
+  });
   afterEach(() => { jest.resetAllMocks(); });
 
   it('should return 200 when updating installment dueDate', async () => {
