@@ -17,7 +17,7 @@ export class StorageService {
     this.bucket = config.getOrThrow('SUPABASE_BUCKET');
   }
 
-  async upload(buffer: Buffer, mimeType: string): Promise<string> {
+  async upload(buffer: Buffer, mimeType: string): Promise<{ path: string; url: string }> {
     const extension = mimeType === 'application/pdf' ? 'pdf' : 'jpg';
     const filename = `${randomUUID()}.${extension}`;
 
@@ -31,7 +31,7 @@ export class StorageService {
     }
 
     const { data } = this.supabase.storage.from(this.bucket).getPublicUrl(filename);
-    return data.publicUrl;
+    return { path: filename, url: data.publicUrl };
   }
 
   async delete(fileUrl: string): Promise<void> {

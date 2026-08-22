@@ -46,7 +46,7 @@ export class PixReceiptsService implements OnApplicationBootstrap {
   async upload(userId: string, file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Arquivo não enviado');
 
-    const fileUrl = await this.storage.upload(file.buffer, file.mimetype);
+    const { path: filePath, url: fileUrl } = await this.storage.upload(file.buffer, file.mimetype);
 
     const receipt = await this.prisma.pixReceipt.create({
       data: {
@@ -60,6 +60,7 @@ export class PixReceiptsService implements OnApplicationBootstrap {
     await this.prisma.pixReceiptBlob.create({
       data: {
         pixReceiptsId: receipt.id,
+        filePath,
         fileUrl,
         mimeType: file.mimetype,
       },
@@ -95,10 +96,10 @@ export class PixReceiptsService implements OnApplicationBootstrap {
       if (mimeType === 'application/pdf') {
         const originalPdfUrl = imageUrl;
         const jpegBuffer = await this.ocr.pdfToJpeg(imageUrl);
-        const jpegUrl = await this.storage.upload(jpegBuffer, 'image/jpeg');
+        const { path: jpegPath, url: jpegUrl } = await this.storage.upload(jpegBuffer, 'image/jpeg');
         await this.prisma.pixReceiptBlob.updateMany({
           where: { pixReceiptsId: receiptId },
-          data: { fileUrl: jpegUrl, mimeType: 'image/jpeg' },
+          data: { filePath: jpegPath, fileUrl: jpegUrl, mimeType: 'image/jpeg' },
         });
         imageUrl = jpegUrl;
         mimeType = 'image/jpeg';
@@ -191,7 +192,7 @@ export class PixReceiptsService implements OnApplicationBootstrap {
 
     if (isValidPixId) {
       const duplicate = await this.prisma.pixReceipt.findFirst({
-        where: { pixTransactionId: pixId, id: { not: receiptId } },
+        where: { pixTransactionId: pixId, userId: receipt.userId, id: { not: receiptId } },
       });
       if (duplicate) {
         warnings.push({ type: 'red', message: 'Comprovante duplicado — já existe um registro com o mesmo ID PIX' });
@@ -658,7 +659,7 @@ export class PixReceiptsService implements OnApplicationBootstrap {
 
       await tx.pixReceipt.update({
         where: { id: receiptId },
-        data: { clientId: null, accountReceivableId: null, installmentId: null, status: restoredStatus },
+        data: { accountReceivableId: null, installmentId: null, status: restoredStatus },
       });
     });
 
@@ -681,6 +682,21 @@ export class PixReceiptsService implements OnApplicationBootstrap {
     });
 
     if (!receipt) throw new NotFoundException('Comprovante não encontrado');
+
+    if (receipt.status === 'ANALYSING') {
+      throw new BadRequestException('Não é possível editar um comprovante que ainda está sendo analisado');
+    }
+
+    if (receipt.status === 'RECONCILED' && data.status !== undefined) {
+      throw new BadRequestException('Use o endpoint de desconciliação antes de alterar o status de um comprovante conciliado');
+    }
+
+    if (data.clientId !== undefined && data.clientId !== null) {
+      const client = await this.prisma.client.findFirst({
+        where: { id: data.clientId, userId, deletedAt: null },
+      });
+      if (!client) throw new NotFoundException('Cliente não encontrado');
+    }
 
     const depositDateTime =
       data.depositDateTime !== undefined
