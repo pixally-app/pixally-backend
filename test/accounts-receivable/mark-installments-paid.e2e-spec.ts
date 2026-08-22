@@ -64,7 +64,7 @@ describe('PATCH /accounts-receivable/:id/installments/:installmentId/mark-paid (
         update: jest.fn(),
         updateMany: jest.fn(),
       },
-      $transaction: jest.fn().mockImplementation((args: any[]) => Promise.all(args)),
+      $transaction: jest.fn(),
     };
     ({ app, jwtService } = await buildTestApp({
       controllers: [AccountsReceivableController],
@@ -75,7 +75,13 @@ describe('PATCH /accounts-receivable/:id/installments/:installmentId/mark-paid (
   });
 
   afterAll(async () => { await app.close(); });
-  beforeEach(() => { prismaService.user.findUnique.mockResolvedValue({ isActive: true }); });
+  beforeEach(() => {
+    prismaService.user.findUnique.mockResolvedValue({ isActive: true });
+    prismaService.$transaction.mockImplementation((callbackOrArray: any) => {
+      if (Array.isArray(callbackOrArray)) return Promise.all(callbackOrArray);
+      return callbackOrArray(prismaService);
+    });
+  });
   afterEach(() => { jest.resetAllMocks(); });
 
   it('CT-CON-007-01 - should return 200 and mark account as PAID when last installment is marked', async () => {
@@ -209,7 +215,7 @@ describe('PATCH /accounts-receivable/:id/installments/mark-all-paid (CT-CON-008)
         update: jest.fn(),
         updateMany: jest.fn(),
       },
-      $transaction: jest.fn().mockImplementation((args: any[]) => Promise.all(args)),
+      $transaction: jest.fn(),
     };
     ({ app, jwtService } = await buildTestApp({
       controllers: [AccountsReceivableController],
@@ -220,7 +226,13 @@ describe('PATCH /accounts-receivable/:id/installments/mark-all-paid (CT-CON-008)
   });
 
   afterAll(async () => { await app.close(); });
-  beforeEach(() => { prismaService.user.findUnique.mockResolvedValue({ isActive: true }); });
+  beforeEach(() => {
+    prismaService.user.findUnique.mockResolvedValue({ isActive: true });
+    prismaService.$transaction.mockImplementation((callbackOrArray: any) => {
+      if (Array.isArray(callbackOrArray)) return Promise.all(callbackOrArray);
+      return callbackOrArray(prismaService);
+    });
+  });
   afterEach(() => { jest.resetAllMocks(); });
 
   it('CT-CON-008-01 - should return 200 and mark all installments as paid', async () => {
