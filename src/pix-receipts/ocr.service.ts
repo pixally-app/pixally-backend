@@ -9,7 +9,17 @@ export class OcrService {
   async extractText(imageUrl: string): Promise<string> {
     this.logger.log(`Iniciando OCR para: ${imageUrl}`);
 
-    const result = await Tesseract.recognize(imageUrl, 'por', {
+    const res = await fetch(imageUrl);
+    const buffer = Buffer.from(await res.arrayBuffer());
+
+    const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF
+      && buffer[buffer.length - 2] === 0xFF && buffer[buffer.length - 1] === 0xD9;
+
+    if (!isJpeg) {
+      throw new Error('Imagem inválida ou corrompida (esperado JPEG)');
+    }
+
+    const result = await Tesseract.recognize(buffer, 'por', {
       logger: () => {},
     });
 
@@ -24,6 +34,11 @@ export class OcrService {
 
     const res = await fetch(pdfUrl);
     const buffer = Buffer.from(await res.arrayBuffer());
+
+    const isPdf = buffer.subarray(0, 4).toString('ascii') === '%PDF';
+    if (!isPdf) {
+      throw new Error('Arquivo PDF inválido ou corrompido');
+    }
 
     const doc = mupdf.Document.openDocument(buffer, 'application/pdf');
     const page = doc.loadPage(0);
