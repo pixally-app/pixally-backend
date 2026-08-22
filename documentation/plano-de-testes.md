@@ -30,11 +30,12 @@ Este plano de testes descreve os cenários, critérios de aceitação e verifica
 - Módulo de Comprovantes (upload, extração OCR, validação por IA)
 - Módulo de Conciliação (conciliação automática, detecção de duplicidade)
 - Módulo de Dashboard (resumo de recebimentos, inadimplentes, alertas)
+- Módulo de Integração WhatsApp (conexão, status, webhook de mensagens)
 - Segurança (autenticação JWT, proteção de rotas, CORS)
 
 ### 3.2 Funcionalidades Fora do Escopo
 
-- Integração com WhatsApp Business API (dependência de serviço externo)
+- Integração direta com a API do WhatsApp Business (dependência de serviço externo — testada via mocks)
 - Integração com API de instituições financeiras (dependência de serviço externo)
 - Testes de performance e carga
 - Testes de acessibilidade
@@ -329,7 +330,60 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 | CT-COMP-002-02 | Sem autenticação | Sem token | Acesso negado | 401 |
 | CT-COMP-002-03 | Sem comprovantes cadastrados | Token válido, banco vazio | Lista vazia [] | 200 |
 
-### 6.5 Módulo de Dashboard
+### 6.5 Módulo de Integração WhatsApp
+
+#### CT-ZAP-001 — GET /zapfy/qrcode
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-ZAP-001-01 | Buscar QR code com integração ativa | Token válido + integração cadastrada | QR code em base64 e estado da instância | 200 |
+| CT-ZAP-001-02 | Sem integração cadastrada para o usuário | Token válido + sem integração | Mensagem: integração não encontrada | 404 |
+| CT-ZAP-001-03 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-ZAP-002 — GET /zapfy/status
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-ZAP-002-01 | Instância conectada (state = open) | Token válido + integração cadastrada | active: true, state: 'open' | 200 |
+| CT-ZAP-002-02 | Instância desconectada (state = close) | Token válido + integração cadastrada | active: false, state: 'close' | 200 |
+| CT-ZAP-002-03 | Sem integração cadastrada para o usuário | Token válido + sem integração | Mensagem: integração não encontrada | 404 |
+| CT-ZAP-002-04 | API do Zapfy indisponível | Token válido + Zapfy fora do ar | Mensagem: serviço indisponível | 503 |
+| CT-ZAP-002-05 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-ZAP-003 — POST /zapfy/disconnect
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-ZAP-003-01 | Desconectar instância com sucesso | Token válido + integração cadastrada | Integração desativada | 200 |
+| CT-ZAP-003-02 | Sem integração cadastrada para o usuário | Token válido + sem integração | Mensagem: integração não encontrada | 404 |
+| CT-ZAP-003-03 | API do Zapfy indisponível | Token válido + Zapfy fora do ar | Mensagem: serviço indisponível | 503 |
+| CT-ZAP-003-04 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-ZAP-004 — POST /zapfy/admin/users/:userId/connect
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-ZAP-004-01 | Admin vincula nova integração a um usuário | Token admin + instanceKey + instanceToken | Integração criada | 200 |
+| CT-ZAP-004-02 | Admin atualiza integração existente do usuário | Token admin + integração já existente | Integração atualizada com novos dados | 200 |
+| CT-ZAP-004-03 | Campos obrigatórios ausentes | Token admin + body incompleto | Mensagem de validação | 400 |
+| CT-ZAP-004-04 | Usuário com role user tenta conectar | Token user | Acesso negado | 403 |
+| CT-ZAP-004-05 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-ZAP-005 — POST /zapfy/webhook
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-ZAP-005-01 | Evento INSTANCE-CONNECTED com secret válido | ?secret=válido + payload INSTANCE-CONNECTED | Integração marcada como ativa | 200 |
+| CT-ZAP-005-02 | Evento INSTANCE-DISCONNECTED com secret válido | ?secret=válido + payload INSTANCE-DISCONNECTED | Integração marcada como inativa | 200 |
+| CT-ZAP-005-03 | Nova mensagem com imagem de remetente desconhecido | ?secret=válido + payload NEW-MESSAGE com imageMessage | Comprovante criado com clientId nulo | 200 |
+| CT-ZAP-005-04 | Nova mensagem com imagem de cliente cadastrado | ?secret=válido + payload NEW-MESSAGE + número do cliente | Comprovante criado vinculado ao cliente | 200 |
+| CT-ZAP-005-05 | Nova mensagem enviada pelo próprio usuário (fromMe) | ?secret=válido + payload NEW-MESSAGE com fromMe: true | Mensagem ignorada, nenhum comprovante criado | 200 |
+| CT-ZAP-005-06 | Nova mensagem de grupo | ?secret=válido + payload NEW-MESSAGE com remoteJid @g.us | Mensagem ignorada, nenhum comprovante criado | 200 |
+| CT-ZAP-005-07 | Nova mensagem sem mídia | ?secret=válido + payload NEW-MESSAGE sem imageMessage nem documentMessage | Mensagem ignorada, nenhum comprovante criado | 200 |
+| CT-ZAP-005-08 | Comprovante apagado no WhatsApp | ?secret=válido + payload MESSAGE-UPDATED com messageStubType: 1 | isDeletedWhatsapp: true + warning criado | 200 |
+| CT-ZAP-005-09 | Secret inválido ou ausente | ?secret=errado + qualquer payload | Acesso negado | 401 |
+
+### 6.6 Módulo de Dashboard
 
 #### CT-DASH-001
 
