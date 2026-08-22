@@ -16,9 +16,16 @@ CREATE TABLE "users" (
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+CREATE TABLE "password_reset_tokens" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "token" TEXT NOT NULL,
+    "expires_at" TIMESTAMP(3) NOT NULL,
+    "used" BOOLEAN NOT NULL DEFAULT false,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-CREATE UNIQUE INDEX "users_document_key" ON "users"("document");
+    CONSTRAINT "password_reset_tokens_pkey" PRIMARY KEY ("id")
+);
 
 CREATE TABLE "zapify_integration" (
     "id" UUID NOT NULL,
@@ -31,8 +38,6 @@ CREATE TABLE "zapify_integration" (
 
     CONSTRAINT "zapify_integration_pkey" PRIMARY KEY ("id")
 );
-
-CREATE UNIQUE INDEX "zapify_integration_instance_key_key" ON "zapify_integration"("instance_key");
 
 CREATE TABLE "clients" (
     "id" UUID NOT NULL,
@@ -61,7 +66,6 @@ CREATE TABLE "phone_client" (
 
     CONSTRAINT "phone_client_pkey" PRIMARY KEY ("id")
 );
-
 
 CREATE TABLE "pix_receipts" (
     "id" UUID NOT NULL,
@@ -92,6 +96,8 @@ CREATE TABLE "pix_receipts" (
     "is_deleted_whatsapp" BOOLEAN,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
+    "account_receivable_id" UUID,
+    "installment_id" UUID,
 
     CONSTRAINT "pix_receipts_pkey" PRIMARY KEY ("id")
 );
@@ -124,7 +130,6 @@ CREATE TABLE "warnings" (
 CREATE TABLE "accounts_receivable" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
-    "pix_receipt_id" UUID,
     "client_id" UUID NOT NULL,
     "client_name" TEXT NOT NULL,
     "service_name" TEXT NOT NULL,
@@ -154,6 +159,16 @@ CREATE TABLE "installments" (
     CONSTRAINT "installments_pkey" PRIMARY KEY ("id")
 );
 
+CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+CREATE UNIQUE INDEX "users_document_key" ON "users"("document");
+
+CREATE UNIQUE INDEX "password_reset_tokens_token_key" ON "password_reset_tokens"("token");
+
+CREATE UNIQUE INDEX "zapify_integration_instance_key_key" ON "zapify_integration"("instance_key");
+
+ALTER TABLE "password_reset_tokens" ADD CONSTRAINT "password_reset_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
 ALTER TABLE "zapify_integration" ADD CONSTRAINT "zapify_integration_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "clients" ADD CONSTRAINT "clients_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -164,6 +179,10 @@ ALTER TABLE "pix_receipts" ADD CONSTRAINT "pix_receipts_user_id_fkey" FOREIGN KE
 
 ALTER TABLE "pix_receipts" ADD CONSTRAINT "pix_receipts_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+ALTER TABLE "pix_receipts" ADD CONSTRAINT "pix_receipts_account_receivable_id_fkey" FOREIGN KEY ("account_receivable_id") REFERENCES "accounts_receivable"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "pix_receipts" ADD CONSTRAINT "pix_receipts_installment_id_fkey" FOREIGN KEY ("installment_id") REFERENCES "installments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
 ALTER TABLE "pix_receipts_blob" ADD CONSTRAINT "pix_receipts_blob_pix_receipts_id_fkey" FOREIGN KEY ("pix_receipts_id") REFERENCES "pix_receipts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE "warnings" ADD CONSTRAINT "warnings_pix_receipt_id_fkey" FOREIGN KEY ("pix_receipt_id") REFERENCES "pix_receipts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -171,8 +190,6 @@ ALTER TABLE "warnings" ADD CONSTRAINT "warnings_pix_receipt_id_fkey" FOREIGN KEY
 ALTER TABLE "warnings" ADD CONSTRAINT "warnings_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_pix_receipt_id_fkey" FOREIGN KEY ("pix_receipt_id") REFERENCES "pix_receipts"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 

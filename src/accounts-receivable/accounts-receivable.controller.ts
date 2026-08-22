@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
@@ -35,7 +35,7 @@ export class AccountsReceivableController {
   @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
   findOne(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.accountsReceivableService.findOne(user.userId, id);
   }
@@ -62,7 +62,7 @@ export class AccountsReceivableController {
   @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
   update(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAccountReceivableDto,
   ) {
     return this.accountsReceivableService.update(user.userId, id, dto);
@@ -75,7 +75,7 @@ export class AccountsReceivableController {
   @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
   markAllInstallmentsAsPaid(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.accountsReceivableService.markAllInstallmentsAsPaid(user.userId, id);
   }
@@ -87,8 +87,8 @@ export class AccountsReceivableController {
   @ApiResponse({ status: 404, description: 'Conta a receber ou parcela não encontrada' })
   updateInstallment(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
-    @Param('installmentId') installmentId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('installmentId', ParseUUIDPipe) installmentId: string,
     @Body() dto: UpdateInstallmentDto,
   ) {
     return this.accountsReceivableService.updateInstallment(user.userId, id, installmentId, dto);
@@ -101,8 +101,8 @@ export class AccountsReceivableController {
   @ApiResponse({ status: 404, description: 'Conta a receber ou parcela não encontrada' })
   markInstallmentAsPaid(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
-    @Param('installmentId') installmentId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('installmentId', ParseUUIDPipe) installmentId: string,
   ) {
     return this.accountsReceivableService.markInstallmentAsPaid(user.userId, id, installmentId);
   }
@@ -114,7 +114,7 @@ export class AccountsReceivableController {
   @ApiResponse({ status: 404, description: 'Conta a receber não encontrada' })
   cancel(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.accountsReceivableService.cancel(user.userId, id);
   }

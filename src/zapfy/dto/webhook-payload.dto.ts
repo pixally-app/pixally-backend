@@ -23,6 +23,8 @@ export interface ZapfyMessageKey {
   id: string;
   messageUuid?: string;
   participant?: string;
+  senderPn?: string;
+  jid?: string;
 }
 
 export interface ZapfyNewMessageData {

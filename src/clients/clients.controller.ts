@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
@@ -34,7 +34,7 @@ export class ClientsController {
   @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
   findOne(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.clientsService.findOne(user.userId, id);
   }
@@ -62,7 +62,7 @@ export class ClientsController {
   @ApiResponse({ status: 409, description: 'Documento ou telefone já cadastrado' })
   update(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateClientDto,
   ) {
     return this.clientsService.update(user.userId, id, dto);
@@ -76,7 +76,7 @@ export class ClientsController {
   @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
   remove(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.clientsService.remove(user.userId, id);
   }

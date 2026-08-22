@@ -10,11 +10,6 @@ import {
 } from 'class-validator';
 
 export class UpdateAccountReceivableDto {
-  @ApiPropertyOptional({ example: 'uuid-do-comprovante' })
-  @IsOptional()
-  @IsUUID()
-  pixReceiptId?: string;
-
   @ApiPropertyOptional({ example: 'Manutenção de ar condicionado' })
   @IsOptional()
   @IsString()

@@ -45,6 +45,7 @@ export class ClientsService {
             select: {
               totalAmount: true,
               paidAt: true,
+              status: true,
             },
           },
           phoneClients: {
@@ -66,6 +67,7 @@ export class ClientsService {
       let totalReceivable = 0;
 
       for (const ar of accountsReceivable) {
+        if (ar.status === 'CANCELLED') continue;
         const value = Number(ar.totalAmount);
         if (ar.paidAt) {
           totalReceived += value;
@@ -335,7 +337,7 @@ export class ClientsService {
     }
 
     const openAccounts = await this.prisma.accountReceivable.count({
-      where: { clientId, status: { in: ['PENDING', 'OVERDUE'] } },
+      where: { clientId, status: 'PENDING' },
     });
 
     if (openAccounts > 0) {
