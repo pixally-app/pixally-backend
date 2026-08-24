@@ -66,7 +66,9 @@ Os testes têm como objetivos principais:
 
 Os testes de endpoint serão desenvolvidos utilizando Jest combinado com Supertest, testando diretamente as rotas da API NestJS sem a necessidade de subir um servidor externo. Para cada rota serão contemplados no mínimo três cenários: sucesso, falha por dados inválidos e falha por ausência de autenticação.
 
-Os testes unitários serão focados nas funcionalidades mais complexas do sistema, especialmente no serviço de extração OCR com IA generativa, na lógica de detecção de duplicidade de comprovantes e no motor de conciliação financeira. Esses serviços serão testados de forma isolada, utilizando mocks para as dependências externas.
+Os testes unitários cobrem a camada de serviço e os adaptadores de APIs externas (OCR, armazenamento, OpenAI, fila de processamento). Esses serviços são testados de forma isolada, com mocks para todas as dependências externas.
+
+A cobertura é intencionalmente dividida entre os dois tipos de execução: os testes de endpoint são responsáveis pela camada HTTP (controllers, DTOs, guards e pipes), enquanto os testes unitários cobrem a lógica de negócio e a integração com serviços externos. 
 
 ## 6. Casos de Teste
 
@@ -314,21 +316,70 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 
 | ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
-| CT-COMP-001-01 | Upload de imagem válida | Token + arquivo PNG/JPG/PDF de comprovante | Dados extraídos: valor, data, pagador, banco, ID transação | 201 |
-| CT-COMP-001-02 | Imagem sem dados reconhecíveis | Token + imagem aleatória | Mensagem: não foi possível extrair dados | 422 |
-| CT-COMP-001-03 | Formato de arquivo inválido | Token + arquivo inválido | Mensagem de validação de formato | 400 |
-| CT-COMP-001-04 | Sem arquivo anexado | Token + body vazio | Mensagem de validação | 400 |
-| CT-COMP-001-05 | Sem autenticação | Sem token + imagem | Acesso negado | 401 |
-| CT-COMP-001-06 | Imagem com baixa resolução | Token + imagem de baixa qualidade | Dados parcialmente extraídos ou erro | 422 |
-| CT-COMP-001-07 | Comprovante duplicado | Token + imagem já enviada anteriormente | Alerta de duplicidade retornado | 200 |
+| CT-COMP-001-01 | Upload de JPEG válido | Token + arquivo JPEG | Comprovante criado com status ANALYSING e origin manual | 201 |
+| CT-COMP-001-02 | Upload de PDF válido | Token + arquivo PDF | Comprovante criado com status ANALYSING e documentFormat pdf | 201 |
+| CT-COMP-001-03 | Sem arquivo anexado | Token + body vazio | Mensagem de validação | 400 |
+| CT-COMP-001-04 | Arquivo acima de 5MB | Token + arquivo > 5MB | Erro de tamanho | 413 |
+| CT-COMP-001-05 | Sem autenticação | Sem token | Acesso negado | 401 |
 
 #### CT-COMP-002 — GET /receipts
 
 | ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
-| CT-COMP-002-01 | Listar todos autenticado | Token válido | Lista de comprovantes | 200 |
-| CT-COMP-002-02 | Sem autenticação | Sem token | Acesso negado | 401 |
-| CT-COMP-002-03 | Sem comprovantes cadastrados | Token válido, banco vazio | Lista vazia [] | 200 |
+| CT-COMP-002-01 | Listar todos autenticado | Token válido | Lista paginada de comprovantes com total e totalPages | 200 |
+| CT-COMP-002-02 | Filtrar por status | Token + ?status=RED_FLAG | Lista filtrada pelo status informado | 200 |
+| CT-COMP-002-03 | Filtrar por nome do cliente | Token + ?clientName=João | Lista filtrada pelo nome do cliente | 200 |
+| CT-COMP-002-04 | Sem comprovantes cadastrados | Token válido, banco vazio | Lista vazia com total 0 | 200 |
+| CT-COMP-002-05 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-COMP-003 — GET /receipts/:id
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-COMP-003-01 | Comprovante existente | Token + ID válido | Dados do comprovante com blob e warnings | 200 |
+| CT-COMP-003-02 | Comprovante inexistente | Token + ID inválido | Mensagem: não encontrado | 404 |
+| CT-COMP-003-03 | Comprovante de outro usuário | Token + ID de outro usuário | Não encontrado | 404 |
+| CT-COMP-003-04 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-COMP-004 — PATCH /receipts/:id
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-COMP-004-01 | Vincular cliente válido | Token + clientId existente do usuário | Comprovante atualizado com clientId | 200 |
+| CT-COMP-004-02 | Atualizar depositAmount | Token + depositAmount numérico | Comprovante atualizado com novo valor | 200 |
+| CT-COMP-004-03 | Comprovante em ANALYSING | Token + ID com status ANALYSING | Operação não permitida | 400 |
+| CT-COMP-004-04 | Comprovante RECONCILED, alterar status | Token + ID RECONCILED + novo status | Operação não permitida | 400 |
+| CT-COMP-004-05 | clientId de outro usuário | Token + clientId de outro usuário | Cliente não encontrado | 404 |
+| CT-COMP-004-06 | Comprovante inexistente | Token + ID inválido | Não encontrado | 404 |
+| CT-COMP-004-07 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-COMP-005 — PATCH /receipts/:id/reconcile
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-COMP-005-01 | Conciliar com conta válida | Token + accountReceivableId válido | Comprovante com status RECONCILED | 200 |
+| CT-COMP-005-02 | Conta cancelada | Token + accountReceivableId de conta CANCELLED | Operação não permitida | 400 |
+| CT-COMP-005-03 | Comprovante inexistente | Token + ID de comprovante inválido | Não encontrado | 404 |
+| CT-COMP-005-04 | Conta inexistente | Token + accountReceivableId inválido | Não encontrado | 404 |
+| CT-COMP-005-05 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-COMP-006 — PATCH /receipts/:id/unreconcile
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-COMP-006-01 | Desconciliar comprovante RECONCILED | Token + ID de comprovante RECONCILED | Comprovante com status RECEIVED, conta volta a PENDING | 200 |
+| CT-COMP-006-02 | Comprovante não está conciliado | Token + ID de comprovante não RECONCILED | Operação não permitida | 400 |
+| CT-COMP-006-03 | Comprovante inexistente | Token + ID inválido | Não encontrado | 404 |
+| CT-COMP-006-04 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-COMP-007 — DELETE /receipts/:id
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-COMP-007-01 | Deletar comprovante válido | Token + ID existente não em ANALYSING | Comprovante removido, sem conteúdo | 204 |
+| CT-COMP-007-02 | Comprovante em ANALYSING | Token + ID com status ANALYSING | Operação não permitida | 400 |
+| CT-COMP-007-03 | Comprovante inexistente | Token + ID inválido | Não encontrado | 404 |
+| CT-COMP-007-04 | Sem autenticação | Sem token | Acesso negado | 401 |
 
 ### 6.5 Módulo de Integração WhatsApp
 
@@ -395,25 +446,43 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 
 ## 7. Testes Unitários
 
-### 7.1 Serviço de Extração OCR + IA
+### 7.1 PixReceiptsService
 
-| ID | Cenário | Entrada | Saída Esperada |
-|---|---|---|---|
-| TU-OCR-001 | Extrair valor de comprovante válido | Mock de imagem com valor R$ 150,00 | valor: 150.00 |
-| TU-OCR-002 | Extrair data de comprovante válido | Mock de imagem com data 01/05/2026 | data: '2026-05-01' |
-| TU-OCR-003 | Extrair nome do pagador | Mock de imagem com nome 'João Silva' | pagador: 'João Silva' |
-| TU-OCR-004 | Extrair identificador da transação | Mock de imagem com ID de transação | idTransacao: 'xxx-xxx-xxx' |
-| TU-OCR-005 | Imagem ilegível lança exceção | Mock de imagem corrompida | Mensagem de validação |
-| TU-OCR-006 | Imagem sem dados PIX lança exceção | Mock de imagem de paisagem | Mensagem de validação |
+| Funcionalidade | Escopo verificado |
+|---|---|
+| Upload e inicialização | Upload de arquivo com enfileiramento, rejeição sem arquivo, reprocessamento de comprovantes travados na inicialização |
+| Processamento OCR + IA | Pipeline completo com dados válidos, fallback para OCR quando GPT falha ou retorna erro, status ERROR após esgotamento de retentativas, conversão de PDF antes do OCR |
+| Detecção de inconsistências | Duplicidade por ID PIX, conflito de data/hora, divergência de valor entre OCR e IA, ausência de ID PIX válido |
+| Vínculo de cliente | Resolução de cliente pelo telefone (JID) quando clientId não está definido, alerta quando nenhum cliente está vinculado |
+| Conciliação automática | Conciliação por valor total, conciliação por parcela individual |
+| CRUD com validações | Listagem paginada com filtros, busca por ID, atualização com validações de status, desconciliação, remoção com reversão de parcelas |
 
-### 7.2 Serviço de Conciliação
+### 7.2 OcrService
 
-| ID | Cenário | Entrada | Saída Esperada |
-|---|---|---|---|
-| TU-CONC-001 | Valores iguais conciliam corretamente | Comprovante R$ 200 + Conta R$ 200 | status: 'conciliado' |
-| TU-CONC-002 | Valores divergentes geram alerta | Comprovante R$ 150 + Conta R$ 200 | status: 'divergente', diferenca: 50 |
-| TU-CONC-003 | Conta vencida é marcada como inadimplente | Conta com vencimento no passado | status: 'vencido' |
-| TU-CONC-004 | Conta paga não pode ser conciliada novamente | Conta com status 'pago' | Mensagem de validação |
+| Funcionalidade | Escopo verificado |
+|---|---|
+| Extração de texto | JPEG válido retorna texto sem espaços extras; arquivo sem magic bytes lança exceção |
+| Conversão de PDF | PDF válido retorna buffer JPEG; arquivo sem assinatura PDF lança exceção |
+
+### 7.3 StorageService
+
+| Funcionalidade | Escopo verificado |
+|---|---|
+| Upload | Extensão correta por MIME type (.jpg / .pdf), uso do bucket configurado, exceção em caso de erro do Supabase |
+| Deleção | Remoção pelo nome de arquivo extraído da URL, tolerância a erro na deleção, retorno antecipado para URL vazia |
+
+### 7.4 OpenAiService
+
+| Funcionalidade | Escopo verificado |
+|---|---|
+| Análise de comprovante | Parse de JSON válido, remoção de bloco markdown antes do parse, retorno de objeto de erro para resposta inválida ou null, verificação de que URL e texto OCR chegam corretamente ao prompt |
+
+### 7.5 QueueService
+
+| Funcionalidade | Escopo verificado |
+|---|---|
+| Execução de jobs | Job único executado uma vez, múltiplos jobs executados na ordem, continuidade após erro interno em um job |
+| Shutdown | Resolução imediata quando ocioso, aguarda job em andamento antes de encerrar |
 
 ## 8. Critérios de Aceite e Saída
 
@@ -426,7 +495,7 @@ Os testes unitários serão focados nas funcionalidades mais complexas do sistem
 ### 8.2 Critérios de Aceite
 
 - Cobertura mínima de 70% das funcionalidades por testes de endpoint
-- 100% dos testes unitários das funcionalidades críticas passando
+- Cobertura mínima de 80% de linhas nos serviços críticos (pix-receipts, OCR, storage, OpenAI, queue)
 - Nenhum teste de cenário de segurança (401/403) falhando
 - Detecção de duplicidade funcionando corretamente
 - Conciliação financeira retornando resultados corretos
