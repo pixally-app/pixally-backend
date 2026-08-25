@@ -31,6 +31,7 @@ Este plano de testes descreve os cenários, critérios de aceitação e verifica
 - Módulo de Conciliação (conciliação automática, detecção de duplicidade)
 - Módulo de Dashboard (resumo de recebimentos, inadimplentes, alertas)
 - Módulo de Integração WhatsApp (conexão, status, webhook de mensagens)
+- Módulo de Alertas (listagem paginada com filtro por tipo, resolução de alertas)
 - Segurança (autenticação JWT, proteção de rotas, CORS)
 
 ### 3.2 Funcionalidades Fora do Escopo
@@ -381,7 +382,34 @@ A cobertura é intencionalmente dividida entre os dois tipos de execução: os t
 | CT-COMP-007-03 | Comprovante inexistente | Token + ID inválido | Não encontrado | 404 |
 | CT-COMP-007-04 | Sem autenticação | Sem token | Acesso negado | 401 |
 
-### 6.5 Módulo de Integração WhatsApp
+### 6.5 Módulo de Alertas
+
+#### CT-WARN-001 — GET /warnings
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-WARN-001-01 | Listar alertas pendentes | Token válido | Lista paginada com `yellowCount` e `redCount` globais | 200 |
+| CT-WARN-001-02 | Filtrar por tipo yellow | Token + ?type=yellow | Apenas alertas do tipo yellow | 200 |
+| CT-WARN-001-03 | Filtrar por tipo red | Token + ?type=red | Apenas alertas do tipo red | 200 |
+| CT-WARN-001-04 | Paginação customizada | Token + ?page=2&limit=5 | Página correta com `totalPages` calculado | 200 |
+| CT-WARN-001-05 | Sem alertas pendentes | Token válido, nenhum alerta no banco | Lista vazia com contadores zerados | 200 |
+| CT-WARN-001-06 | Tipo inválido | Token + ?type=invalido | Mensagem de validação | 400 |
+| CT-WARN-001-07 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+#### CT-WARN-002 — PATCH /warnings/:id/resolve
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-WARN-002-01 | Resolver alerta válido | Token + warningId + resolutionReason | Alerta com `resolved: true` e `resolvedAt` preenchido | 200 |
+| CT-WARN-002-02 | Último alerta resolvido atualiza comprovante | Token + último warning de comprovante RED_FLAG | Comprovante atualizado para status RECEIVED | 200 |
+| CT-WARN-002-03 | Alerta já resolvido | Token + warningId com `resolved: true` | Mensagem: alerta já foi resolvido | 400 |
+| CT-WARN-002-04 | Alerta inexistente | Token + ID inválido | Mensagem: alerta não encontrado | 404 |
+| CT-WARN-002-05 | resolutionReason ausente | Token + warningId + body sem motivo | Mensagem de validação | 400 |
+| CT-WARN-002-06 | resolutionReason vazio | Token + warningId + motivo = '' | Mensagem de validação | 400 |
+| CT-WARN-002-07 | ID não é UUID | Token + ID não-UUID | Erro de validação do pipe | 400 |
+| CT-WARN-002-08 | Sem autenticação | Sem token | Acesso negado | 401 |
+
+### 6.6 Módulo de Integração WhatsApp
 
 #### CT-ZAP-001 — GET /zapfy/qrcode
 
@@ -434,7 +462,7 @@ A cobertura é intencionalmente dividida entre os dois tipos de execução: os t
 | CT-ZAP-005-08 | Comprovante apagado no WhatsApp | ?secret=válido + payload MESSAGE-UPDATED com messageStubType: 1 | isDeletedWhatsapp: true + warning criado | 200 |
 | CT-ZAP-005-09 | Secret inválido ou ausente | ?secret=errado + qualquer payload | Acesso negado | 401 |
 
-### 6.6 Módulo de Dashboard
+### 6.7 Módulo de Dashboard
 
 #### CT-DASH-001
 
