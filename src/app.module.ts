@@ -8,10 +8,11 @@ import { ClientsModule } from './clients/clients.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { UsersModule } from './users/users.module.js';
 import { PixReceiptsModule } from './pix-receipts/pix-receipts.module.js';
+import { WarningsModule } from './warnings/warnings.module.js';
 import { ZapfyModule } from './zapfy/zapfy.module.js';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, ClientsModule, AccountsReceivableModule, UsersModule, ZapfyModule, PixReceiptsModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, ClientsModule, AccountsReceivableModule, UsersModule, ZapfyModule, PixReceiptsModule, WarningsModule],
   controllers: [AppController],
   providers: [AppService],
 })
