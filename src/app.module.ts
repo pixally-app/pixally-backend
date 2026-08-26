@@ -10,9 +10,10 @@ import { UsersModule } from './users/users.module.js';
 import { PixReceiptsModule } from './pix-receipts/pix-receipts.module.js';
 import { WarningsModule } from './warnings/warnings.module.js';
 import { ZapfyModule } from './zapfy/zapfy.module.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, ClientsModule, AccountsReceivableModule, UsersModule, ZapfyModule, PixReceiptsModule, WarningsModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, AuthModule, ClientsModule, AccountsReceivableModule, UsersModule, ZapfyModule, PixReceiptsModule, WarningsModule, DashboardModule],
   controllers: [AppController],
   providers: [AppService],
 })
