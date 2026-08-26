@@ -226,11 +226,10 @@ A cobertura é intencionalmente dividida entre os dois tipos de execução: os t
 | CT-CON-001-02 | Sem autenticação | Sem token | Acesso negado | 401 |
 | CT-CON-001-03 | Cliente inexistente | Token + cliente_id inválido | Mensagem: cliente não encontrado | 404 |
 | CT-CON-001-04 | Valor inválido (negativo) | Token + valor = -100 | Mensagem de validação | 400 |
-| CT-CON-001-05 | Data de vencimento no passado | Token + vencimento passado | Mensagem de validação | 400 |
-| CT-CON-001-06 | Campos obrigatórios ausentes | Token + body incompleto | Mensagem de validação | 400 |
-| CT-CON-001-07 | Criar conta parcelada válida | Token + valor + parcelas = 3 | Conta criada com o valor parcelado | 201 |
-| CT-CON-001-08 | Número de parcelas inválido (zero) | Token + parcelas = 0 | Mensagem de validação | 400 |
-| CT-CON-001-09 | Número de parcelas negativo | Token + parcelas = -2 | Mensagem de validação | 400 |
+| CT-CON-001-05 | Campos obrigatórios ausentes | Token + body incompleto | Mensagem de validação | 400 |
+| CT-CON-001-06 | Criar conta parcelada válida | Token + valor + parcelas = 3 | Conta criada com o valor parcelado | 201 |
+| CT-CON-001-07 | Número de parcelas inválido (zero) | Token + parcelas = 0 | Mensagem de validação | 400 |
+| CT-CON-001-08 | Número de parcelas negativo | Token + parcelas = -2 | Mensagem de validação | 400 |
 
 #### CT-CON-002 — GET /accounts-receivable (com filtros)
 
@@ -468,9 +467,10 @@ A cobertura é intencionalmente dividida entre os dois tipos de execução: os t
 
 | ID | Cenário | Endpoint | Resultado Esperado | Status HTTP |
 |---|---|---|---|---|
-| CT-DASH-001-01 | Resumo de recebimentos autenticado | GET /dashboard/resumo | Total pendente, total conciliado mensal, total vencido, total comprovantes mensal | 200 |
+| CT-DASH-001-01 | Resumo de recebimentos autenticado | GET /dashboard/resumo | Retorna os 4 campos: receivedThisMonth, totalPending, totalOverdue e processedThisMonth | 200 |
 | CT-DASH-001-02 | Resumo sem autenticação | GET /dashboard/resumo | Acesso negado | 401 |
-| CT-DASH-001-03 | Resumo dos recebidos nos últimos 7 dias | GET /dashboard/graphic | Dados e data dos últimos recebidos | 200 |
+| CT-DASH-001-03 | Gráfico dos últimos 7 dias autenticado | GET /dashboard/graphic | Array com exatamente 7 entradas contendo date (DD/MM) e valor (número) por dia | 200 |
+| CT-DASH-001-04 | Agrupamento e soma por dia | GET /dashboard/graphic | Valores somados corretamente por dia; recibos com depositDateTime nulo são ignorados | 200 |
 
 ## 7. Testes Unitários
 
