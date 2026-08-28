@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   ParseUUIDPipe,
@@ -70,6 +71,23 @@ export class PixReceiptsController {
       query.limit,
       { status: query.status, origin: query.origin, clientName: query.clientName },
     );
+  }
+
+  @Get('export/csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="comprovantes.csv"')
+  @ApiOperation({ summary: 'Exportar comprovantes em CSV' })
+  @ApiResponse({ status: 200, description: 'Arquivo CSV com todos os comprovantes' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  exportCsv(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListReceiptsQueryDto,
+  ) {
+    return this.pixReceiptsService.exportCsv(user.userId, {
+      status: query.status,
+      origin: query.origin,
+      clientName: query.clientName,
+    });
   }
 
   @Get(':id')

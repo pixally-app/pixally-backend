@@ -430,6 +430,60 @@ export class PixReceiptsService implements OnApplicationBootstrap {
     return matches.length === 1 ? matches[0] : null;
   }
 
+  async exportCsv(
+    userId: string,
+    filters: { status?: string; origin?: string; clientName?: string } = {},
+  ): Promise<string> {
+    const where: PixReceiptWhereInput = { userId };
+
+    if (filters.status) where.status = filters.status;
+    if (filters.origin) where.origin = filters.origin;
+    if (filters.clientName) {
+      where.client = {
+        name: { contains: filters.clientName, mode: 'insensitive' },
+        deletedAt: null,
+      };
+    }
+
+    const receipts = await this.prisma.pixReceipt.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: { client: { select: { name: true } } },
+    });
+
+    const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+    const headers = [
+      'Data/Hora',
+      'Valor',
+      'Status',
+      'Nome Remetente',
+      'CPF/CNPJ Remetente',
+      'Banco Remetente',
+      'Nome Destinatário',
+      'Descrição',
+      'Cliente',
+      'ID Transação PIX',
+    ];
+
+    const rows = receipts.map((r) =>
+      [
+        escape(r.depositDateTime ? r.depositDateTime.toISOString() : ''),
+        escape(r.depositAmount !== null ? Number(r.depositAmount) : ''),
+        escape(r.status),
+        escape(r.depositOriginName),
+        escape(r.depositOriginDocument),
+        escape(r.depositOriginBank),
+        escape(r.depositDestinationName),
+        escape(r.description),
+        escape(r.client?.name),
+        escape(r.pixTransactionId),
+      ].join(','),
+    );
+
+    return [headers.map(escape).join(','), ...rows].join('\r\n');
+  }
+
   async findAll(
     userId: string,
     page = 1,
