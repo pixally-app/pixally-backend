@@ -15,11 +15,10 @@ export class AccountsReceivableService {
     const skip = (page - 1) * limit;
     const now = new Date();
 
-    const where: AccountReceivableWhereInput = { userId };
+    const baseWhere: AccountReceivableWhereInput = { userId };
+    if (clientId) baseWhere.clientId = clientId;
 
-    if (clientId) {
-      where.clientId = clientId;
-    }
+    const where: AccountReceivableWhereInput = { ...baseWhere };
 
     if (status) {
       if (status === AccountReceivableStatusFilter.PAID) {
@@ -35,7 +34,7 @@ export class AccountsReceivableService {
       }
     }
 
-    const [records, total] = await Promise.all([
+    const [records, total, pendingSum, paidSum, overdueSum] = await Promise.all([
       this.prisma.accountReceivable.findMany({
         where,
         skip,
@@ -43,6 +42,18 @@ export class AccountsReceivableService {
         orderBy: { dueDate: 'asc' },
       }),
       this.prisma.accountReceivable.count({ where }),
+      this.prisma.accountReceivable.aggregate({
+        where: { ...baseWhere, status: 'PENDING', dueDate: { gte: now } },
+        _sum: { totalAmount: true },
+      }),
+      this.prisma.accountReceivable.aggregate({
+        where: { ...baseWhere, status: 'PAID' },
+        _sum: { totalAmount: true },
+      }),
+      this.prisma.accountReceivable.aggregate({
+        where: { ...baseWhere, status: 'PENDING', dueDate: { lt: now } },
+        _sum: { totalAmount: true },
+      }),
     ]);
 
     return {
@@ -51,6 +62,9 @@ export class AccountsReceivableService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+      totalPending: Number(pendingSum._sum.totalAmount ?? 0),
+      totalPaid: Number(paidSum._sum.totalAmount ?? 0),
+      totalOverdue: Number(overdueSum._sum.totalAmount ?? 0),
     };
   }
 
