@@ -88,4 +88,13 @@ export class PaginatedAccountsReceivableResponseDto {
 
   @ApiProperty({ example: 5 })
   totalPages: number;
+
+  @ApiProperty({ example: 1500.0, description: 'Soma total das contas pendentes (não vencidas) do usuário' })
+  totalPending: number;
+
+  @ApiProperty({ example: 800.0, description: 'Soma total das contas pagas do usuário' })
+  totalPaid: number;
+
+  @ApiProperty({ example: 200.0, description: 'Soma total das contas vencidas do usuário' })
+  totalOverdue: number;
 }
