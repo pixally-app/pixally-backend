@@ -381,6 +381,18 @@ A cobertura é intencionalmente dividida entre os dois tipos de execução: os t
 | CT-COMP-007-03 | Comprovante inexistente | Token + ID inválido | Não encontrado | 404 |
 | CT-COMP-007-04 | Sem autenticação | Sem token | Acesso negado | 401 |
 
+#### CT-COMP-008 — GET /receipts/export/csv
+
+| ID | Cenário | Dados de Entrada | Resultado Esperado | Status HTTP |
+|---|---|---|---|---|
+| CT-COMP-008-01 | Exportar com autenticação válida | Token válido | CSV com cabeçalho + 1 linha por comprovante, Content-Type: text/csv | 200 |
+| CT-COMP-008-02 | Header Content-Disposition correto | Token válido | `attachment; filename="comprovantes.csv"` no response | 200 |
+| CT-COMP-008-03 | Sem comprovantes | Token válido, banco vazio | Apenas a linha de cabeçalho | 200 |
+| CT-COMP-008-04 | Filtrar por status | Token + ?status=RED_FLAG | Apenas comprovantes do status informado | 200 |
+| CT-COMP-008-05 | Filtrar por origin | Token + ?origin=whatsapp | Apenas comprovantes da origem informada | 200 |
+| CT-COMP-008-06 | Filtrar por nome do cliente | Token + ?clientName=João | Apenas comprovantes vinculados ao cliente | 200 |
+| CT-COMP-008-07 | Sem autenticação | Sem token | Acesso negado | 401 |
+
 ### 6.5 Módulo de Alertas
 
 #### CT-WARN-001 — GET /warnings
