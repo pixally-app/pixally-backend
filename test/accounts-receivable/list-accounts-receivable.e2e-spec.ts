@@ -16,6 +16,7 @@ describe('GET /accounts-receivable (CT-CON-002)', () => {
     accountReceivable: {
       findMany: jest.Mock<any>;
       count: jest.Mock<any>;
+      aggregate: jest.Mock<any>;
     };
   };
 
@@ -46,6 +47,7 @@ describe('GET /accounts-receivable (CT-CON-002)', () => {
       accountReceivable: {
         findMany: jest.fn(),
         count: jest.fn(),
+        aggregate: jest.fn(),
       },
     };
 
@@ -58,7 +60,10 @@ describe('GET /accounts-receivable (CT-CON-002)', () => {
   });
 
   afterAll(async () => { await app.close(); });
-  beforeEach(() => { prismaService.user.findUnique.mockResolvedValue({ isActive: true }); });
+  beforeEach(() => {
+    prismaService.user.findUnique.mockResolvedValue({ isActive: true });
+    prismaService.accountReceivable.aggregate.mockResolvedValue({ _sum: { totalAmount: 0 } });
+  });
   afterEach(() => { jest.resetAllMocks(); });
 
   it('CT-CON-002-01 - should return 200 and paginated list of accounts', async () => {
@@ -75,6 +80,9 @@ describe('GET /accounts-receivable (CT-CON-002)', () => {
     expect(response.body).toHaveProperty('total', 2);
     expect(response.body).toHaveProperty('page', 1);
     expect(response.body).toHaveProperty('totalPages', 1);
+    expect(response.body).toHaveProperty('totalPending');
+    expect(response.body).toHaveProperty('totalPaid');
+    expect(response.body).toHaveProperty('totalOverdue');
     expect(Array.isArray(response.body.data)).toBe(true);
   });
 
