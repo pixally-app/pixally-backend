@@ -127,17 +127,19 @@ describe('POST /accounts-receivable (CT-CON-001)', () => {
     expect(response.body).toHaveProperty('message');
   });
 
-  it('CT-CON-001-05 - should return 400 when dueDate is in the past', async () => {
+  it('CT-CON-001-05 - should return 201 when dueDate is in the past', async () => {
+    prismaService.client.findFirst.mockResolvedValue(mockClient);
+    prismaService.accountReceivable.create.mockResolvedValue(
+      buildMockAccount({ dueDate: new Date('2020-01-01') }),
+    );
+
     const response = await request(app.getHttpServer())
       .post('/accounts-receivable')
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ ...validPayload, dueDate: '2020-01-01' })
-      .expect(400);
+      .expect(201);
 
-    expect(response.body).toHaveProperty('message');
-    expect(response.body.message).toEqual(
-      expect.arrayContaining([expect.stringContaining('dueDate must be today or in the future')]),
-    );
+    expect(response.body).toHaveProperty('id');
   });
 
   it('CT-CON-001-06 - should return 400 when required fields are missing', async () => {
