@@ -1,0 +1,40 @@
+@startuml C4-Container-Pixally
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+SHOW_PERSON_OUTLINE()
+LAYOUT_TOP_DOWN()
+
+title Container Diagram Pixally
+
+Person(mei, "Microempreendedor", "Usuário do sistema.\nAcessa via navegador.")
+Person_Ext(cliente, "Cliente do MEI", "Envia comprovante PIX\npelo WhatsApp.")
+
+System_Ext(whatsapp, "WhatsApp", "Mensageiro utilizado\npelo cliente do MEI.")
+System_Ext(zapfy, "Zapfy", "Serviço externo que gerencia a instância\nWhatsApp e entrega mensagens ao backend\nvia webhook.")
+System_Ext(openai, "OpenAI GPT-4o", "Modelo de IA multimodal.\nExtrai dados estruturados\nda imagem do comprovante.")
+System_Ext(supabase, "Supabase Storage", "Armazena os arquivos\nde imagem e PDF dos comprovantes.")
+
+System_Boundary(pixally, "Pixally") {
+    Container(frontend, "Frontend", "Next.js 16 / React 19", "Interface web do sistema.\nUpload de comprovantes, dashboard,\ncontas a receber e alertas.")
+
+    Container(backend, "Backend", "NestJS 11 / Node.js", "API REST. Processamento de comprovantes,\nconciliação automática e regras de negócio.\nOCR interno via Tesseract.js.")
+
+    ContainerDb(db, "Banco de Dados", "PostgreSQL 16 / Prisma ORM", "Usuários, clientes, comprovantes PIX,\ncontas a receber, parcelas e alertas.")
+}
+
+Lay_R(mei, cliente)
+Lay_D(cliente, whatsapp)
+Lay_D(whatsapp, zapfy)
+
+Rel(mei, frontend, "Upload manual", "imagem / PDF")
+Rel(cliente, whatsapp, "Envia comprovante PIX", "WhatsApp")
+Rel(zapfy, whatsapp, "Mantém sessão / escuta mensagens", "WhatsApp Web")
+BiRel(backend, zapfy, "Gerencia instância / recebe webhook", "HTTPS")
+BiRel(frontend, backend, "REST API", "HTTPS / JWT Bearer")
+BiRel(backend, supabase, "Armazena arquivo / URL pública", "HTTPS / SDK")
+BiRel(backend, openai, "Análise de comprovante", "HTTPS")
+BiRel(backend, db, "Leitura / Escrita", "Prisma ORM")
+
+SHOW_LEGEND()
+@enduml
