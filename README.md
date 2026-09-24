@@ -173,6 +173,9 @@ npm run test:cov
 
 # Testes e2e
 npm run test:e2e
+
+# Testes de desempenho
+npm run test:performance
 ```
 
 ## Arquitetura
