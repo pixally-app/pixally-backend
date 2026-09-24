@@ -18,7 +18,11 @@
     "!src/**/*.spec.ts",
     "!src/app.controller.ts",
     "!src/app.service.ts",
-    "!src/prisma/**"
+    "!src/prisma/**",
+    "!src/pix-receipts/ocr.service.ts",
+    "!src/pix-receipts/openai.service.ts",
+    "!src/pix-receipts/storage.service.ts",
+    "!src/pix-receipts/queue.service.ts"
   ],
   "coverageDirectory": "coverage/e2e"
 }
