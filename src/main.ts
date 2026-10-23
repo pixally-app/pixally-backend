@@ -13,17 +13,15 @@ async function bootstrap() {
   });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
 
-  if (configService.get<string>('NODE_ENV') !== 'production') {
-    const config = new DocumentBuilder()
-      .setTitle('Pixally API')
-      .setDescription('API para gerenciamento de comprovantes PIX')
-      .setVersion('1.0')
-      .addBearerAuth()
-      .build();
+  const config = new DocumentBuilder()
+    .setTitle('Pixally API')
+    .setDescription('API para gerenciamento de comprovantes PIX')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
 
-    const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api/docs', app, document);
-  }
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
 
   app.enableShutdownHooks();
   await app.listen(process.env.PORT ?? 3000);
