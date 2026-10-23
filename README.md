@@ -64,8 +64,8 @@ O Pixally é um sistema que centraliza e automatiza o gerenciamento de comprovan
 
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/Danielle1Melo/pixally-backend.git
-cd pixally-backend
+git clone https://gitlab.fslab.dev/pix-receipt-ai/pix-receipt-ai-api.git
+cd pix-receipt-ai-api
 
 # 2. Configure as variáveis de ambiente
 cp .env.example .env
