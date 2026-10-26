@@ -122,6 +122,8 @@ model PixReceipt {
   depositDestinationAccount      String?   @map("deposit_destination_account")
   pixTransactionId               String?   @map("pix_transaction_id")
   processmentOcrOutcome          String?   @map("processment_ocr_outcome") @db.Text
+  processingTimeMs               Int?      @map("processing_time_ms")
+  usedFallback                   Boolean?  @map("used_fallback")
   jid                            String?
   messageId                      String?   @map("message_id")
   isDeletedWhatsapp              Boolean?  @map("is_deleted_whatsapp")
