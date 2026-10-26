@@ -142,6 +142,7 @@ export class PixReceiptsService implements OnApplicationBootstrap {
   }
 
   private async runProcessing(receiptId: string, imageUrl: string, receipt: PixReceiptModel) {
+    const startTime = Date.now();
     const warnings: ReceiptWarning[] = [];
 
     const ocrText = await this.ocr.extractText(imageUrl);
@@ -275,6 +276,8 @@ export class PixReceiptsService implements OnApplicationBootstrap {
           accountReceivableId: resolvedAccountReceivableId,
           installmentId: resolvedInstallmentId,
           processmentOcrOutcome: ocrText,
+          processingTimeMs: Date.now() - startTime,
+          usedFallback: usedOcrFallback,
           pixTransactionId: pixId || null,
           depositDateTime,
           depositAmount,
@@ -430,6 +433,10 @@ export class PixReceiptsService implements OnApplicationBootstrap {
     return matches.length === 1 ? matches[0] : null;
   }
 
+  private escapeCsv(v: unknown): string {
+    return `"${String(v ?? '').replace(/"/g, '""')}"`;
+  }
+
   async exportCsv(
     userId: string,
     filters: { status?: string; origin?: string; clientName?: string } = {},
@@ -451,8 +458,6 @@ export class PixReceiptsService implements OnApplicationBootstrap {
       include: { client: { select: { name: true } } },
     });
 
-    const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-
     const headers = [
       'Data/Hora',
       'Valor',
@@ -468,20 +473,79 @@ export class PixReceiptsService implements OnApplicationBootstrap {
 
     const rows = receipts.map((r) =>
       [
-        escape(r.depositDateTime ? r.depositDateTime.toISOString() : ''),
-        escape(r.depositAmount !== null ? Number(r.depositAmount) : ''),
-        escape(r.status),
-        escape(r.depositOriginName),
-        escape(r.depositOriginDocument),
-        escape(r.depositOriginBank),
-        escape(r.depositDestinationName),
-        escape(r.description),
-        escape(r.client?.name),
-        escape(r.pixTransactionId),
+        this.escapeCsv(r.depositDateTime ? r.depositDateTime.toISOString() : ''),
+        this.escapeCsv(r.depositAmount !== null ? Number(r.depositAmount) : ''),
+        this.escapeCsv(r.status),
+        this.escapeCsv(r.depositOriginName),
+        this.escapeCsv(r.depositOriginDocument),
+        this.escapeCsv(r.depositOriginBank),
+        this.escapeCsv(r.depositDestinationName),
+        this.escapeCsv(r.description),
+        this.escapeCsv(r.client?.name),
+        this.escapeCsv(r.pixTransactionId),
       ].join(','),
     );
 
-    return [headers.map(escape).join(','), ...rows].join('\r\n');
+    return [headers.map((h) => this.escapeCsv(h)).join(','), ...rows].join('\r\n');
+  }
+
+  async exportMetricsCsv(userId: string): Promise<string> {
+    const receipts = await this.prisma.pixReceipt.findMany({
+      where: { userId, status: { notIn: ['ANALYSING', 'ERROR'] } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const headers = [
+      'ID',
+      'Status',
+      'Usado Fallback OCR',
+      'Tempo Processamento (ms)',
+      'Valor',
+      'Data/Hora',
+      'ID Transação PIX',
+      'Nome Remetente',
+      'CPF/CNPJ Remetente',
+      'Tipo Doc Remetente',
+      'Banco Remetente',
+      'Agência Remetente',
+      'Conta Remetente',
+      'Nome Destinatário',
+      'CPF/CNPJ Destinatário',
+      'Tipo Doc Destinatário',
+      'Banco Destinatário',
+      'Agência Destinatário',
+      'Conta Destinatário',
+      'Descrição',
+      'Criado Em',
+    ];
+
+    const rows = receipts.map((r) =>
+      [
+        this.escapeCsv(r.id),
+        this.escapeCsv(r.status),
+        this.escapeCsv(r.usedFallback === true ? 'sim' : r.usedFallback === false ? 'não' : ''),
+        this.escapeCsv(r.processingTimeMs ?? ''),
+        this.escapeCsv(r.depositAmount !== null ? Number(r.depositAmount) : ''),
+        this.escapeCsv(r.depositDateTime ? r.depositDateTime.toISOString() : ''),
+        this.escapeCsv(r.pixTransactionId),
+        this.escapeCsv(r.depositOriginName),
+        this.escapeCsv(r.depositOriginDocument),
+        this.escapeCsv(r.depositOriginDocumentType),
+        this.escapeCsv(r.depositOriginBank),
+        this.escapeCsv(r.depositOriginAgency),
+        this.escapeCsv(r.depositOriginAccount),
+        this.escapeCsv(r.depositDestinationName),
+        this.escapeCsv(r.depositDestinationDocument),
+        this.escapeCsv(r.depositDestinationDocumentType),
+        this.escapeCsv(r.depositDestinationBank),
+        this.escapeCsv(r.depositDestinationAgency),
+        this.escapeCsv(r.depositDestinationAccount),
+        this.escapeCsv(r.description),
+        this.escapeCsv(r.createdAt.toISOString()),
+      ].join(','),
+    );
+
+    return [headers.map((h) => this.escapeCsv(h)).join(','), ...rows].join('\r\n');
   }
 
   async findAll(

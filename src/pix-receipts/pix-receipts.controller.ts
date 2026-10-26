@@ -90,6 +90,16 @@ export class PixReceiptsController {
     });
   }
 
+  @Get('metrics/export')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="metricas-comprovantes.csv"')
+  @ApiOperation({ summary: 'Exportar métricas de extração dos comprovantes para validação acadêmica' })
+  @ApiResponse({ status: 200, description: 'CSV com todos os campos extraídos, tempo de processamento e uso de fallback' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  exportMetrics(@CurrentUser() user: AuthenticatedUser) {
+    return this.pixReceiptsService.exportMetricsCsv(user.userId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Buscar comprovante por ID' })
   @ApiResponse({ status: 200, description: 'Dados do comprovante com blob e warnings' })
