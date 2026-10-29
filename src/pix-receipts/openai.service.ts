@@ -86,7 +86,8 @@ export class OpenAiService {
     });
 
     const raw = response.choices[0].message.content ?? '';
-    this.logger.log('Resposta recebida do GPT-4o');
+    const usage = response.usage;
+    this.logger.log(`GPT-4o tokens - prompt: ${usage?.prompt_tokens}, completion: ${usage?.completion_tokens}, total: ${usage?.total_tokens}`);
 
     return this.parseJson(raw);
   }
