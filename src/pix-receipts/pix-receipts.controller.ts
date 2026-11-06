@@ -20,6 +20,7 @@ import { memoryStorage } from 'multer';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import type { AuthenticatedUser } from '../auth/jwt.strategy.js';
+import { EvaluateQueryDto } from './dto/evaluate-query.dto.js';
 import { ListReceiptsQueryDto } from './dto/list-receipts-query.dto.js';
 import { ReconcileReceiptDto } from './dto/reconcile-receipt.dto.js';
 import { UpdateReceiptDto } from './dto/update-receipt.dto.js';
@@ -90,14 +91,17 @@ export class PixReceiptsController {
     });
   }
 
-  @Get('metrics/export')
+  @Get('evaluate/csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  @Header('Content-Disposition', 'attachment; filename="metricas-comprovantes.csv"')
-  @ApiOperation({ summary: 'Exportar métricas de extração dos comprovantes para validação acadêmica' })
-  @ApiResponse({ status: 200, description: 'CSV com todos os campos extraídos, tempo de processamento e uso de fallback' })
+  @Header('Content-Disposition', 'attachment; filename="avaliacao.csv"')
+  @ApiOperation({ summary: 'Experimento pareado: reprocessa todos os comprovantes pela variante escolhida e retorna CSV' })
+  @ApiResponse({ status: 200, description: 'CSV com valores extraídos, tempos e tokens por comprovante' })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
-  exportMetrics(@CurrentUser() user: AuthenticatedUser) {
-    return this.pixReceiptsService.exportMetricsCsv(user.userId);
+  evaluate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: EvaluateQueryDto,
+  ) {
+    return this.pixReceiptsService.evaluateCsv(user.userId, query.variant);
   }
 
   @Get(':id')
