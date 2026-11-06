@@ -489,60 +489,86 @@ export class PixReceiptsService implements OnApplicationBootstrap {
     return [headers.map((h) => this.escapeCsv(h)).join(','), ...rows].join('\r\n');
   }
 
-  async exportMetricsCsv(userId: string): Promise<string> {
+  async evaluateCsv(userId: string, variant: 'A' | 'B' | 'C' | 'D'): Promise<string> {
     const receipts = await this.prisma.pixReceipt.findMany({
-      where: { userId, status: { notIn: ['ANALYSING', 'ERROR'] } },
+      where: { userId },
+      include: { blob: true },
       orderBy: { createdAt: 'asc' },
     });
 
     const headers = [
-      'ID',
-      'Status',
-      'Usado Fallback OCR',
-      'Tempo Processamento (ms)',
-      'Valor',
-      'Data/Hora',
-      'ID Transação PIX',
-      'Nome Remetente',
-      'CPF/CNPJ Remetente',
-      'Tipo Doc Remetente',
-      'Banco Remetente',
-      'Agência Remetente',
-      'Conta Remetente',
-      'Nome Destinatário',
-      'CPF/CNPJ Destinatário',
-      'Tipo Doc Destinatário',
-      'Banco Destinatário',
-      'Agência Destinatário',
-      'Conta Destinatário',
-      'Descrição',
-      'Criado Em',
+      'comprovante_id', 'variante', 'execucao',
+      'id_transacao_extraido', 'nome_pagador_extraido', 'valor_extraido',
+      'data_hora_extraido', 'banco_extraido',
+      'tempo_ocr_s', 'tempo_api_s', 'tempo_total_s',
+      'tokens_entrada', 'tokens_saida',
+      'valor_no_texto_ocr', 'observacao',
     ];
 
-    const rows = receipts.map((r) =>
-      [
-        this.escapeCsv(r.id),
-        this.escapeCsv(r.status),
-        this.escapeCsv(r.usedFallback === true ? 'sim' : r.usedFallback === false ? 'não' : ''),
-        this.escapeCsv(r.processingTimeMs ?? ''),
-        this.escapeCsv(r.depositAmount !== null ? Number(r.depositAmount) : ''),
-        this.escapeCsv(r.depositDateTime ? r.depositDateTime.toISOString() : ''),
-        this.escapeCsv(r.pixTransactionId),
-        this.escapeCsv(r.depositOriginName),
-        this.escapeCsv(r.depositOriginDocument),
-        this.escapeCsv(r.depositOriginDocumentType),
-        this.escapeCsv(r.depositOriginBank),
-        this.escapeCsv(r.depositOriginAgency),
-        this.escapeCsv(r.depositOriginAccount),
-        this.escapeCsv(r.depositDestinationName),
-        this.escapeCsv(r.depositDestinationDocument),
-        this.escapeCsv(r.depositDestinationDocumentType),
-        this.escapeCsv(r.depositDestinationBank),
-        this.escapeCsv(r.depositDestinationAgency),
-        this.escapeCsv(r.depositDestinationAccount),
-        this.escapeCsv(r.description),
-        this.escapeCsv(r.createdAt.toISOString()),
-      ].join(','),
+    const rows = await Promise.all(
+      receipts
+        .filter((r) => r.blob[0]?.fileUrl)
+        .map(async (receipt) => {
+          const fileUrl = receipt.blob[0].fileUrl as string;
+          const startTotal = Date.now();
+          let ocrText = '';
+          let ocrTimeS = 0;
+          let apiTimeS = 0;
+          let tokensIn = 0;
+          let tokensOut = 0;
+          let data: Partial<import('./openai.service.js').ReceiptData> = {};
+          let observacao = '';
+
+          try {
+            if (variant === 'A') {
+              const t = Date.now();
+              ocrText = await this.ocr.extractText(fileUrl);
+              ocrTimeS = (Date.now() - t) / 1000;
+              data = this.buildOcrFallbackData(ocrText);
+            } else {
+              if (variant === 'C' || variant === 'D') {
+                const t = Date.now();
+                ocrText = await this.ocr.extractText(fileUrl);
+                ocrTimeS = (Date.now() - t) / 1000;
+              }
+
+              const t = Date.now();
+              const result = await this.openai.analyzeForEvaluation(
+                fileUrl,
+                ocrText,
+                variant === 'B' || variant === 'C',
+                variant === 'C' || variant === 'D',
+              );
+              apiTimeS = (Date.now() - t) / 1000;
+              data = result.data;
+              tokensIn = result.tokensIn;
+              tokensOut = result.tokensOut;
+            }
+          } catch (err) {
+            observacao = `Erro: ${String(err).slice(0, 100)}`;
+          }
+
+          const totalTimeS = (Date.now() - startTotal) / 1000;
+          const valorNoOcr = ocrText ? (this.extractAmountFromOcr(ocrText) !== null ? '1' : '0') : '';
+
+          return [
+            this.escapeCsv(receipt.id),
+            this.escapeCsv(variant),
+            this.escapeCsv('1'),
+            this.escapeCsv(data.id_transferencia ?? ''),
+            this.escapeCsv(data.origem_nome ?? ''),
+            this.escapeCsv(data.valor ?? ''),
+            this.escapeCsv(data.data_hora ?? ''),
+            this.escapeCsv(data.origem_instituicao_bancaria ?? ''),
+            this.escapeCsv(ocrTimeS || ''),
+            this.escapeCsv(apiTimeS || ''),
+            this.escapeCsv(totalTimeS),
+            this.escapeCsv(tokensIn || ''),
+            this.escapeCsv(tokensOut || ''),
+            this.escapeCsv(valorNoOcr),
+            this.escapeCsv(observacao),
+          ].join(',');
+        }),
     );
 
     return [headers.map((h) => this.escapeCsv(h)).join(','), ...rows].join('\r\n');
