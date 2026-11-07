@@ -90,6 +90,8 @@ export class OpenAiService {
     });
 
     const raw = response.choices[0].message.content ?? '';
+    const usage = response.usage;
+    this.logger.log(`Tokens (C) — entrada: ${usage?.prompt_tokens}, saída: ${usage?.completion_tokens}`);
     return this.parseJson(raw);
   }
 
