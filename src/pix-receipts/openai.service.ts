@@ -73,20 +73,22 @@ export class OpenAiService {
   async analyzeReceipt(fileUrl: string, ocrText: string): Promise<ReceiptData> {
     this.logger.log('Enviando comprovante para o GPT-4o');
 
-    const prompt = `Dado este comprovante de transferência bancária e sua respectiva extração de OCR (texto), o seu trabalho é cruzar as duas fontes de informação para extrair os dados com a melhor precisão possível em um formato JSON sem níveis de aninhamento.\n\n    O formato final do JSON deve ser:\n\n    ${JSON_SCHEMA}\n\n    ${JSON_RULES}`;
+    const prompt = ocrText
+      ? `Dado este comprovante de transferência bancária e sua respectiva extração de OCR (texto), o seu trabalho é cruzar as duas fontes de informação para extrair os dados com a melhor precisão possível em um formato JSON sem níveis de aninhamento.\n\n    O formato final do JSON deve ser:\n\n    ${JSON_SCHEMA}\n\n    ${JSON_RULES}`
+      : `Dado este comprovante de transferência bancária, extraia os dados com a melhor precisão possível em um formato JSON sem níveis de aninhamento.\n\n    O formato final do JSON deve ser:\n\n    ${JSON_SCHEMA}\n\n    ${JSON_RULES}`;
+
+    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+      { type: 'text', text: prompt },
+      { type: 'image_url', image_url: { url: fileUrl } },
+    ];
+
+    if (ocrText) {
+      content.push({ type: 'text', text: `Aqui está a extração do OCR:\n${ocrText}` });
+    }
 
     const response = await this.client.chat.completions.create({
       model: 'gpt-4o',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: fileUrl } },
-            { type: 'text', text: `Aqui está a extração do OCR:\n${ocrText}` },
-          ],
-        },
-      ],
+      messages: [{ role: 'user', content: content as never }],
     });
 
     const raw = response.choices[0].message.content ?? '';
