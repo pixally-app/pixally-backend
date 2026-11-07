@@ -101,7 +101,7 @@ export class PixReceiptsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: EvaluateQueryDto,
   ) {
-    return this.pixReceiptsService.evaluateCsv(user.userId, query.variant);
+    return this.pixReceiptsService.evaluateCsv(user.userId, query.variant, query.execucoes ?? 3);
   }
 
   @Get(':id')
