@@ -145,7 +145,12 @@ export class PixReceiptsService implements OnApplicationBootstrap {
     const startTime = Date.now();
     const warnings: ReceiptWarning[] = [];
 
-    const ocrText = await this.ocr.extractText(imageUrl);
+    let ocrText = '';
+    try {
+      ocrText = await this.ocr.extractText(imageUrl);
+    } catch {
+      this.logger.warn(`Receipt ${receiptId}: OCR falhou, enviando apenas imagem ao GPT`);
+    }
 
     let data: ReceiptData;
     let usedOcrFallback = false;
