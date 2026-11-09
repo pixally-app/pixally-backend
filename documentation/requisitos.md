@@ -29,7 +29,7 @@
 |----|-----------|--------|
 | RF12 | O sistema deve permitir o cadastro de clientes com nome, documento (CPF/CNPJ), descrição e telefone | Implementado |
 | RF13 | O sistema deve permitir o registro de contas a receber, com descrição do serviço/produto, valor total, valor parcelado, data de vencimento e cliente vinculado | Implementado |
-| RF14 | O sistema deve conciliar automaticamente os comprovantes processados com as contas a receber em aberto | Implementado |
+| RF14 | O sistema deve realizar a baixa automática dos comprovantes recebidos e as contas a receber cadastradas | Implementado |
 | RF15 | O sistema deve atualizar o status da conta a receber ao identificar o pagamento correspondente (Em aberto, Pago, Vencido) | Implementado |
 | RF16 | O sistema deve identificar pagamentos com valor divergente do esperado | Implementado |
 
