@@ -33,10 +33,10 @@ export class CreateAccountReceivableDto {
   @Type(() => Number)
   totalAmount!: number;
 
-  @ApiPropertyOptional({ example: 3, description: 'Quantidade de parcelas (omitir para pagamento único)' })
+  @ApiPropertyOptional({ example: 3, description: 'Quantidade de parcelas (mínimo 1; omitir para pagamento único)' })
   @IsOptional()
   @IsInt()
-  @Min(2)
+  @Min(1)
   @Type(() => Number)
   installmentCount?: number;
 
