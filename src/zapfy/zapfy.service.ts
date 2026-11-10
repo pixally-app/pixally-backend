@@ -1,28 +1,39 @@
-import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { StorageService } from '../pix-receipts/storage.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PixReceiptsService } from '../pix-receipts/pix-receipts.service.js';
 import { ZapfyClient } from './zapfy.client.js';
 import type { ConnectIntegrationDto } from './dto/connect-integration.dto.js';
 import type {
-  ZapfyWebhookPayload,
-  ZapfyNewMessagePayload,
-  ZapfyMessageUpdatedPayload,
-  ZapfyDocumentMessage,
-  ZapfyImageMessage,
+  EvolutionWebhookPayload,
+  EvolutionMessagesUpsertPayload,
+  EvolutionConnectionUpdatePayload,
+  EvolutionMediaMessage,
 } from './dto/webhook-payload.dto.js';
 
 @Injectable()
 export class ZapfyService {
+  private readonly logger = new Logger(ZapfyService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly zapfyClient: ZapfyClient,
     private readonly pixReceiptsService: PixReceiptsService,
+    private readonly storage: StorageService,
+    private readonly config: ConfigService,
   ) {}
 
   async connectInstance(userId: string, dto: ConnectIntegrationDto) {
+    const appUrl = this.config.getOrThrow<string>('APP_URL');
+    const webhookSecret = this.config.getOrThrow<string>('ZAPFY_WEBHOOK_SECRET');
+    const webhookUrl = `${appUrl}/zapfy/webhook?secret=${webhookSecret}`;
+
     const existing = await this.prisma.zapifyIntegration.findFirst({
       where: { userId },
     });
+
+    await this.zapfyClient.createInstance(dto.instanceKey, webhookUrl);
 
     if (existing) {
       return this.prisma.zapifyIntegration.update({
@@ -55,9 +66,9 @@ export class ZapfyService {
     }
 
     try {
-      await this.zapfyClient.disconnect(integration.instanceKey, integration.instanceToken);
+      await this.zapfyClient.disconnect(integration.instanceKey);
     } catch {
-      throw new ServiceUnavailableException('Zapfy API unavailable. Please try again later.');
+      throw new ServiceUnavailableException('WhatsApp API unavailable. Please try again later.');
     }
 
     await this.prisma.zapifyIntegration.update({
@@ -75,10 +86,7 @@ export class ZapfyService {
       throw new NotFoundException('Zapfy integration not found for this user');
     }
 
-    return this.zapfyClient.getQrCode(
-      integration.instanceKey,
-      integration.instanceToken,
-    );
+    return this.zapfyClient.getQrCode(integration.instanceKey);
   }
 
   async getStatus(userId: string) {
@@ -93,15 +101,12 @@ export class ZapfyService {
     let state: string;
 
     try {
-      ({ state } = await this.zapfyClient.getState(
-        integration.instanceKey,
-        integration.instanceToken,
-      ));
+      ({ state } = await this.zapfyClient.getState(integration.instanceKey));
     } catch {
-      throw new ServiceUnavailableException('Zapfy API unavailable. Please try again later.');
+      throw new ServiceUnavailableException('WhatsApp API unavailable. Please try again later.');
     }
 
-    const isConnected = state === 'connected' || state === 'open';
+    const isConnected = state === 'open';
 
     if (isConnected && !integration.active) {
       await this.prisma.zapifyIntegration.update({
@@ -125,59 +130,46 @@ export class ZapfyService {
     };
   }
 
-  async handleWebhook(payload: ZapfyWebhookPayload) {
-    if (payload.type === 'INSTANCE-CONNECTED') {
-      await this.handleInstanceConnected(payload.instanceKey);
+  async handleWebhook(payload: EvolutionWebhookPayload) {
+    if (payload.event === 'connection.update') {
+      await this.handleConnectionUpdate(payload as EvolutionConnectionUpdatePayload);
       return;
     }
 
-    if (payload.type === 'INSTANCE-DISCONNECTED') {
-      await this.handleInstanceDisconnected(payload.instanceKey);
-      return;
-    }
-
-    if (payload.type === 'NEW-MESSAGE') {
-      await this.handleNewMessage(payload);
-      return;
-    }
-
-    if (payload.type === 'MESSAGE-UPDATED') {
-      await this.handleMessageUpdated(payload);
+    if (payload.event === 'messages.upsert') {
+      await this.handleNewMessage(payload as EvolutionMessagesUpsertPayload);
       return;
     }
   }
 
-  private async handleInstanceConnected(instanceKey: string) {
+  private async handleConnectionUpdate(payload: EvolutionConnectionUpdatePayload) {
+    const { instance, data } = payload;
+    const isConnected = data.state === 'open';
+
     await this.prisma.zapifyIntegration.updateMany({
-      where: { instanceKey },
-      data: { active: true, connectedAt: new Date() },
+      where: { instanceKey: instance },
+      data: isConnected
+        ? { active: true, connectedAt: new Date() }
+        : { active: false, disconnectedAt: new Date() },
     });
   }
 
-  private async handleInstanceDisconnected(instanceKey: string) {
-    await this.prisma.zapifyIntegration.updateMany({
-      where: { instanceKey },
-      data: { active: false, disconnectedAt: new Date() },
-    });
-  }
-
-  private async handleNewMessage(payload: ZapfyNewMessagePayload) {
-    const { instanceKey, data } = payload;
+  private async handleNewMessage(payload: EvolutionMessagesUpsertPayload) {
+    const { instance, data } = payload;
     const { key, message } = data;
 
     if (key.fromMe) return;
-    // ignore group messages — only direct contacts are processed
     if (key.remoteJid.endsWith('@g.us')) return;
 
     const media = this.extractMedia(message);
     if (!media) return;
 
     const integration = await this.prisma.zapifyIntegration.findUnique({
-      where: { instanceKey },
+      where: { instanceKey: instance },
     });
     if (!integration) return;
 
-    const rawJid = key.jid ?? key.senderPn ?? key.remoteJid;
+    const rawJid = key.remoteJid;
     const phoneNumber = rawJid.split('@')[0];
 
     const phoneClient = await this.prisma.phoneClient.findFirst({
@@ -188,13 +180,32 @@ export class ZapfyService {
       select: { clientId: true },
     });
 
+    const mimeType = media.mimetype;
+
+    let fileUrl: string;
+    try {
+      const { base64 } = await this.zapfyClient.getMediaBase64(instance, {
+        id: key.id,
+        remoteJid: key.remoteJid,
+        fromMe: key.fromMe,
+      });
+
+      const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+      const buffer = Buffer.from(base64Data, 'base64');
+      const uploaded = await this.storage.upload(buffer, mimeType);
+      fileUrl = uploaded.url;
+    } catch (err) {
+      this.logger.error(`Erro ao baixar/subir mídia do WhatsApp: ${err}`);
+      return;
+    }
+
     const receipt = await this.prisma.pixReceipt.create({
       data: {
         userId: integration.userId,
         clientId: phoneClient?.clientId ?? null,
         status: 'ANALYSING',
         origin: 'whatsapp',
-        documentFormat: media.mimetype === 'application/pdf' ? 'pdf' : 'image',
+        documentFormat: mimeType === 'application/pdf' ? 'pdf' : 'image',
         jid: phoneNumber,
         messageId: key.id,
       },
@@ -203,67 +214,20 @@ export class ZapfyService {
     await this.prisma.pixReceiptBlob.create({
       data: {
         pixReceiptsId: receipt.id,
-        fileUrl: media.url,
-        mimeType: media.mimetype,
+        fileUrl,
+        mimeType,
       },
     });
 
-    await this.pixReceiptsService.processFromWebhook(receipt.id, media.url, media.mimetype);
+    await this.pixReceiptsService.processFromWebhook(receipt.id, fileUrl, mimeType);
   }
 
-  private async handleMessageUpdated(payload: ZapfyMessageUpdatedPayload) {
-    const { instanceKey, data } = payload;
-
-    const integration = await this.prisma.zapifyIntegration.findUnique({
-      where: { instanceKey },
-    });
-    if (!integration) return;
-
-    for (const updateData of data) {
-      const isDeleted =
-        updateData.update.message == null || updateData.update.messageStubType === 1;
-
-      if (!isDeleted) continue;
-
-      const messageId = updateData.key?.id;
-      const originalMessageId = updateData.update.key?.id;
-
-      if (!messageId && !originalMessageId) continue;
-
-      const receipt =
-        (await this.prisma.pixReceipt.findFirst({
-          where: { messageId: originalMessageId, userId: integration.userId },
-        })) ??
-        (await this.prisma.pixReceipt.findFirst({
-          where: { messageId, userId: integration.userId },
-        }));
-
-      if (!receipt || receipt.isDeletedWhatsapp) continue;
-
-      await this.prisma.pixReceipt.update({
-        where: { id: receipt.id },
-        data: { isDeletedWhatsapp: true },
-      });
-
-      await this.prisma.warning.create({
-        data: {
-          pixReceiptId: receipt.id,
-          clientId: receipt.clientId,
-          type: 'red',
-          message: 'Comprovante apagado no WhatsApp',
-        },
-      });
+  private extractMedia(message: EvolutionMessagesUpsertPayload['data']['message']): EvolutionMediaMessage | null {
+    if (message.imageMessage) return message.imageMessage;
+    if (message.documentMessage) return message.documentMessage;
+    if (message.documentWithCaptionMessage?.message?.documentMessage) {
+      return message.documentWithCaptionMessage.message.documentMessage;
     }
-  }
-
-  private extractMedia(
-    message: ZapfyNewMessagePayload['data']['message'],
-  ): ZapfyImageMessage | ZapfyDocumentMessage | null {
-    return (
-      message.imageMessage ??
-      message.documentMessage ??
-      message.documentWithCaptionMessage ??
-      null
-    );
+    return null;
   }
 }

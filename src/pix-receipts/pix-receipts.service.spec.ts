@@ -184,7 +184,13 @@ describe('PixReceiptsService', () => {
       try {
         const receipt = buildReceipt();
         mockPrisma.pixReceipt.findUnique.mockResolvedValue(receipt);
-        mockOcr.extractText.mockRejectedValue(new Error('OCR failure'));
+        mockOcr.extractText.mockResolvedValue('');
+        mockOpenai.analyzeReceipt.mockResolvedValue(buildGptData());
+        mockPrisma.pixReceipt.findFirst.mockResolvedValue(null);
+        mockPrisma.phoneClient.findFirst.mockResolvedValue(null);
+        mockPrisma.accountReceivable.findMany.mockResolvedValue([]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (mockPrisma.$transaction as any).mockRejectedValue(new Error('DB failure'));
         mockPrisma.pixReceipt.update.mockResolvedValue({});
         mockPrisma.warning.create.mockResolvedValue({});
 

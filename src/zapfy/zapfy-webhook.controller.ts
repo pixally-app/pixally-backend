@@ -1,7 +1,7 @@
 import { Body, Controller, HttpCode, Logger, Post, Query, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { ZapfyWebhookPayload } from './dto/webhook-payload.dto.js';
+import type { EvolutionWebhookPayload } from './dto/webhook-payload.dto.js';
 import { ZapfyService } from './zapfy.service.js';
 
 @ApiTags('Zapfy')
@@ -16,12 +16,12 @@ export class ZapfyWebhookController {
 
   @Post('webhook')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Receber eventos do Zapfy - chamado pelo Zapfy, sem autenticação JWT' })
+  @ApiOperation({ summary: 'Receber eventos de WhatsApp - chamado pelo provider, sem autenticação JWT' })
   @ApiResponse({ status: 200, description: 'Evento processado com sucesso' })
   @ApiResponse({ status: 401, description: 'Secret inválido ou ausente' })
   handleWebhook(
     @Query('secret') secret: string,
-    @Body() payload: ZapfyWebhookPayload,
+    @Body() payload: EvolutionWebhookPayload,
   ) {
     const expected = this.config.getOrThrow<string>('ZAPFY_WEBHOOK_SECRET');
 
@@ -30,7 +30,7 @@ export class ZapfyWebhookController {
       throw new UnauthorizedException('Invalid webhook secret');
     }
 
-    this.logger.log(`Webhook recebido — tipo: ${payload.type} | instância: ${payload.instanceKey}`);
+    this.logger.log(`Webhook recebido — evento: ${payload.event} | instância: ${payload.instance}`);
 
     return this.zapfyService.handleWebhook(payload);
   }

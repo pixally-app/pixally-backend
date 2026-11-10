@@ -1,71 +1,61 @@
-export interface ZapfyImageMessage {
-  url: string;
-  mimetype: string;
-  caption?: string;
-}
-
-export interface ZapfyDocumentMessage {
-  url: string;
-  mimetype: string;
-  fileName?: string;
-  caption?: string;
-}
-
-export interface ZapfyMessageContent {
-  imageMessage?: ZapfyImageMessage;
-  documentMessage?: ZapfyDocumentMessage;
-  documentWithCaptionMessage?: ZapfyDocumentMessage;
-}
-
-export interface ZapfyMessageKey {
+export interface EvolutionMessageKey {
   remoteJid: string;
   fromMe: boolean;
   id: string;
-  messageUuid?: string;
   participant?: string;
-  senderPn?: string;
-  jid?: string;
 }
 
-export interface ZapfyNewMessageData {
-  key: ZapfyMessageKey;
-  message: ZapfyMessageContent;
+export interface EvolutionMediaMessage {
+  mimetype: string;
+  caption?: string;
+  url?: string;
+  mediaKey?: string;
+  directPath?: string;
+}
+
+export interface EvolutionDocumentWithCaption {
+  message?: {
+    documentMessage?: EvolutionMediaMessage;
+  };
+}
+
+export interface EvolutionMessageContent {
+  imageMessage?: EvolutionMediaMessage;
+  documentMessage?: EvolutionMediaMessage;
+  documentWithCaptionMessage?: EvolutionDocumentWithCaption;
+}
+
+export interface EvolutionMessagesUpsertData {
+  key: EvolutionMessageKey;
+  message: EvolutionMessageContent;
   messageTimestamp: number;
-  status: number;
+  pushName?: string;
 }
 
-export interface ZapfyMessageUpdate {
-  message: unknown;
-  messageStubType: number;
-  key?: ZapfyMessageKey;
+export interface EvolutionConnectionUpdateData {
+  state: 'open' | 'close' | 'connecting' | 'refused';
+  statusReason?: number;
 }
 
-export interface ZapfyMessageUpdateData {
-  key: ZapfyMessageKey;
-  update: ZapfyMessageUpdate;
+export interface EvolutionMessagesUpsertPayload {
+  event: 'messages.upsert';
+  instance: string;
+  data: EvolutionMessagesUpsertData;
 }
 
-export interface ZapfyNewMessagePayload {
-  type: 'NEW-MESSAGE';
-  instanceKey: string;
-  id: string;
-  data: ZapfyNewMessageData;
+export interface EvolutionConnectionUpdatePayload {
+  event: 'connection.update';
+  instance: string;
+  data: EvolutionConnectionUpdateData;
 }
 
-export interface ZapfyMessageUpdatedPayload {
-  type: 'MESSAGE-UPDATED';
-  instanceKey: string;
-  id: string;
-  data: ZapfyMessageUpdateData[];
+export interface EvolutionGenericPayload {
+  event: string;
+  instance: string;
+  data: unknown;
 }
 
-export interface ZapfyInstanceStatusPayload {
-  type: 'INSTANCE-CONNECTED' | 'INSTANCE-DISCONNECTED';
-  instanceKey: string;
-  data: null;
-}
-
-export type ZapfyWebhookPayload =
-  | ZapfyNewMessagePayload
-  | ZapfyMessageUpdatedPayload
-  | ZapfyInstanceStatusPayload;
+export type EvolutionWebhookPayload =
+  | EvolutionMessagesUpsertPayload
+  | EvolutionConnectionUpdatePayload
+  | EvolutionGenericPayload;
