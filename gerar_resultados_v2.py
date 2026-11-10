@@ -57,7 +57,7 @@ def norm_data(s):
     if not s:
         return ''
     s = s.strip().replace('T', ' ')
-    return s[:16]  # YYYY-MM-DD HH:MM
+    return s[:19]  # YYYY-MM-DD HH:MM:SS
 
 
 def round_time(s):
